@@ -3,9 +3,12 @@
   "configurations": [
     {
       "name": "game",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["--watch", "server/index.js"],
-      "port": 3000
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 8787
     }
   ]
 }

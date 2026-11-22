@@ -21,14 +21,16 @@
 
 ```bash
 npm install
-npm start        # http://localhost:3000
-npm test         # 규칙·궤적·판정·서버 테스트
+npm run dev       # Cloudflare 로컬 환경 http://localhost:8787
+npm test          # 규칙·궤적·판정·방 테스트
+npm run deploy    # Cloudflare에 배포
 ```
 
 ## 구조
 
 - `shared/` — 규칙, 선 분석, 궤적, 타격 판정, AI (서버와 브라우저가 같이 사용)
-- `server/` — Express + Socket.IO (방 관리, 온라인 판정)
+- `server/` — 방 로직(RoomCore)과 경기 진행(ServerMatch)
+- `worker/` — Cloudflare Worker + Durable Object (방 하나 = Durable Object 하나, 웹소켓)
 - `public/` — Three.js 3D 클라이언트
 
-Render 무료 플랜은 15분간 접속이 없으면 잠들고, 첫 접속 때 깨어나는 데 최대 1분 걸려요.
+Cloudflare Workers 무료 플랜으로 돌아가요 (잠들지 않음).
