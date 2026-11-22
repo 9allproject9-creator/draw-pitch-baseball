@@ -495,17 +495,23 @@ export function createPlayers(scene) {
     showBatter(on) { batter.root.visible = on; },
     knockBatter() {
       swingAnim = null;
-      launch(batter, new THREE.Vector3(-2.5 - Math.random() * 1.5, 7 + Math.random() * 2, 8 + Math.random() * 3), new THREE.Vector3(-6, 3, 9));
+      batter.root.visible = true; setGhost(batter, false);
+      launch(batter, new THREE.Vector3(-1.2 - Math.random() * 0.8, 4.2 + Math.random() * 1.2, 11 + Math.random() * 3), new THREE.Vector3(-6, 3, 9));
       knock = { start: performance.now(), stars: true };
     },
     launchAll() {
       swingAnim = null;
       const r = () => Math.random();
-      launch(batter, new THREE.Vector3(-3 - r() * 2, 8 + r() * 3, 9 + r() * 4), new THREE.Vector3(-7, 4, 10));
-      launch(catcher, new THREE.Vector3(1 + r() * 2, 9 + r() * 3, 11 + r() * 4), new THREE.Vector3(9, -3, -8));
-      launch(umpire, new THREE.Vector3(2.5 + r() * 2, 10 + r() * 3, 12 + r() * 4), new THREE.Vector3(-8, 5, 12));
+      // 낮고 빠르게 → 기본 카메라 화면 안에서 날아가 벽에 꽂힘
+      launch(batter, new THREE.Vector3(-0.6 - r() * 0.8, 3.8 + r() * 1.4, 12 + r() * 3), new THREE.Vector3(-7, 4, 10));
+      launch(catcher, new THREE.Vector3(0.4 + r() * 0.8, 4.2 + r() * 1.4, 14 + r() * 3), new THREE.Vector3(9, -3, -8));
+      launch(umpire, new THREE.Vector3(0.8 + r() * 1, 3.6 + r() * 1.4, 15 + r() * 3), new THREE.Vector3(-8, 5, 12));
     },
     onImpact(fn) { onImpact = fn; },
+    // 날아갈 때는 숨김/반투명 해제 (투수 시점의 투수 제외)
+    showFlyers(view) {
+      for (const c of [batter, catcher, umpire]) { c.root.visible = true; setGhost(c, false); }
+    },
     batFlip() {
       if (!batter.bat || !batter.bat.visible) return;
       spawnFlyer(batter.bat.children, new THREE.Vector3(-1.2, 8, 1.5), new THREE.Vector3(2, 1, 16));

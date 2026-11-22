@@ -58,7 +58,7 @@ export function createGameController(d) {
     effects.sparks(pos);
     stage.shake(0.9);
     hud.quip(resultQuip('HBP'));
-    later(() => { stage.setView('chaos', { duration: 0.35 }); players.setGhosts('chaos'); }, 120);
+
     effects.zoneRing(false);
     if (c.iAmBatter && !c.swung && !c.tookSent) { c.tookSent = true; batInput.disarm(); source.submitTake(); }
   }
@@ -72,8 +72,8 @@ export function createGameController(d) {
     stage.shake(1.3);
     effects.dust({ x: 0, y: 0.3, z: 0.8 });
     effects.sparks({ x: 0, y: 1, z: 0.5 });
-    stage.setView('chaos', { duration: 0.35 });
-    players.setGhosts('chaos');
+    // 기본 카메라 그대로. 타자 시점에선 숨겨둔 포수·심판도 보이게
+    players.showFlyers(stage.view);
     hud.quip(resultQuip('MISS'));
   }
 
