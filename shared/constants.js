@@ -16,7 +16,7 @@ export const HIT_ZONE = { zMin: -1.15, zMax: 0.45, ideal: -0.35 };
 // uvMin/uvMax: 그리기 제한 없음 (박스는 카메라 구도용). 서버 안전 범위만 둠
 export const STROKE_LIMITS = { uvMin: -2, uvMax: 3, maxPoints: 600, minDurationMs: 60, maxDurationMs: 20000, inkMax: 5000, clockMs: 15000 };
 // 비행 시간 = base + 선 길이(m)×perMeter + 그린 시간×drawFactor (공은 선을 따라 일정한 속도로 이동)
-export const FLIGHT = { base: 250, perMeter: 100, drawFactor: 0.12, minMs: 400, maxMs: 3000, speedDistance: 17.2, blendFrac: 0.08 };
+export const FLIGHT = { base: 200, perMeter: 85, drawFactor: 0.3, minMs: 330, maxMs: 3000, speedDistance: 17.2, blendFrac: 0.08 };
 export const CONTACT = { dPerfect: 0.06, dMax: 0.30, timingHalf: 0.8 };
 export const RESULT_MS = {
   TAKE_STRIKE: 2200, TAKE_BALL: 2200, BALL_AUTO: 2200, MISS: 2200, FOUL: 2600,

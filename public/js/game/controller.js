@@ -5,6 +5,7 @@ import { describePitch } from '/shared/matchCore.js';
 import { sanitizeStroke } from '/shared/stroke.js';
 import { HIT_ZONE } from '/shared/constants.js';
 import { TEAM_COLORS } from '../scene/players.js';
+import { pitchQuip, resultQuip } from './quips.js';
 
 const WINDUP_MS = 520;
 const RELEASE_AT = 0.92;
@@ -24,6 +25,7 @@ export function createGameController(d) {
   const later = (fn, ms) => { const t = setTimeout(fn, Math.max(0, ms)); timers.push(t); return t; };
   const clearTimers = () => { timers.forEach(clearTimeout); timers.length = 0; };
   const opp = () => (me === 'home' ? 'away' : 'home');
+  players.onImpact((pos, kind) => { audio.play('thud'); stage.shake(kind === 'wall' ? 0.7 : 0.25); effects.dust(pos); });
 
   stage.onFrame((dt, now) => {
     if (!source || !cur) return;
@@ -32,7 +34,7 @@ export function createGameController(d) {
     if (cur.iAmBatter) effects.zoneRing(!cur.swung && !cur.hit && t > 0 && p.z >= HIT_ZONE.zMin && p.z <= HIT_ZONE.zMax);
     if (!cur.hit && !cur.contactPending && t > cur.path.T * 0.45) players.setGlove(cur.path.positionAt(Math.min(t + 140, cur.path.catchMs)));
     if (!cur.hit && !cur.contactPending && !cur.hbpFrozen && cur.hbpT != null && t >= cur.hbpT) hbpImpact(cur);
-    if (!cur.hit && !cur.contactPending && !cur.hbpFrozen && !cur.caught && t >= cur.path.catchMs) {
+    if (!cur.hit && !cur.contactPending && !cur.hbpFrozen && !cur.chaos && !cur.caught && t >= cur.path.catchMs) {
       cur.caught = true;
       ball.stopAt(cur.path.catchMs);
       audio.play('mitt');
@@ -55,8 +57,24 @@ export function createGameController(d) {
     audio.play('bonk');
     effects.sparks(pos);
     stage.shake(0.9);
+    hud.quip(resultQuip('HBP'));
+    later(() => { stage.setView('chaos', { duration: 0.35 }); players.setGhosts('chaos'); }, 120);
     effects.zoneRing(false);
     if (c.iAmBatter && !c.swung && !c.tookSent) { c.tookSent = true; batInput.disarm(); source.submitTake(); }
+  }
+
+  // 헛스윙: 타자·포수·심판 전부 발사
+  function missChaos(c) {
+    if (!c || c.chaos || c.hit) return;
+    c.chaos = true;
+    players.launchAll();
+    audio.play('boom');
+    stage.shake(1.3);
+    effects.dust({ x: 0, y: 0.3, z: 0.8 });
+    effects.sparks({ x: 0, y: 1, z: 0.5 });
+    stage.setView('chaos', { duration: 0.35 });
+    players.setGhosts('chaos');
+    hud.quip(resultQuip('MISS'));
   }
 
   function teamName(t) { return names[t] || (t === 'home' ? '홈' : '원정'); }
@@ -68,6 +86,7 @@ export function createGameController(d) {
       game = p.game;
       hud.setGame(game);
       banner.hide();
+      hud.quip(null);
       ball.clear();
       drawPad.stop();
       batInput.disarm();
@@ -126,6 +145,7 @@ export function createGameController(d) {
     ball.playPitch(path, ps.startNow, TEAM_COLORS[fieldingTeam(game)], style);
     const now = performance.now();
     later(() => audio.play('whoosh'), ps.startNow - now);
+    later(() => hud.quip(pitchQuip(info)), ps.startNow - now + 100);
     hud.showPitch(null);
     if (fieldingTeam(game) === me) {
       drawPad.replay(ps.stroke, ps.startNow, path.T);
@@ -188,6 +208,7 @@ export function createGameController(d) {
       later(() => doContact(r, prevGame), r.swingT - tNow);
     } else {
       if (c.contactPending) { c.contactPending = false; ball.stopAt(Infinity); }
+      if (r.outcome === 'MISS' && r.swingT != null) later(() => missChaos(c), r.swingT + 90 - tNow);
       const arrive = Math.max(r.swingT != null ? r.swingT + 120 : 0, c.path.catchMs + 60);
       later(() => { hud.showPitch(r.pitch); showOutcome(r, prevGame); }, arrive - tNow);
     }
@@ -240,6 +261,7 @@ export function createGameController(d) {
 
   function showOutcome(r, prevGame) {
     const { text, kind } = outcomeText(r);
+    if (r.outcome !== 'MISS' && r.outcome !== 'HBP') { const q = resultQuip(r.outcome, r.events); if (q) hud.quip(q); }
     banner.show(text, kind, 1700);
     const o = r.outcome;
     if (r.events.some((e) => e.type === 'strikeout')) { audio.play('strikeout'); if (battingTeam(prevGame) === me) audio.play('boo'); }

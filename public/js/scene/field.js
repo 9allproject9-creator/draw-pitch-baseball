@@ -11,6 +11,8 @@ export const BASES = {
 // 각도 θ (0 = 중견수 방향, + = 1루 쪽) 에서 펜스 거리
 export const fenceRadius = (theta) => 100 + 22 * Math.cos(2 * theta);
 export const FENCE_H = 3.2;
+// 홈 뒤 벽 (날아간 선수들이 부딪힘)
+export const BACKWALL = { z: 6.8, halfW: 9, h: 5.5 };
 
 function stripeTexture() {
   const c = document.createElement('canvas');
@@ -262,6 +264,25 @@ export function buildField(scene) {
   const board = new THREE.Mesh(new THREE.BoxGeometry(26, 9, 1), new THREE.MeshLambertMaterial({ color: '#1b1f2a' }));
   board.position.set(0, 21, -150);
   root.add(board);
+
+  // 홈 뒤 벽: 쿠션 패드 + 문구
+  {
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#1d4e89'; g.fillRect(0, 0, 1024, 256);
+    for (let x = 0; x < 1024; x += 128) { g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(x, 0, 64, 256); }
+    g.fillStyle = '#ffd23f'; g.fillRect(0, 0, 1024, 18); g.fillRect(0, 238, 1024, 18);
+    g.font = '900 92px Arial Black, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 10; g.strokeStyle = '#0b2140'; g.strokeText('⚠ 물리법칙 무시 구역 ⚠', 512, 132);
+    g.fillStyle = '#ffffff'; g.fillText('⚠ 물리법칙 무시 구역 ⚠', 512, 132);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(BACKWALL.halfW * 2, BACKWALL.h, 0.6),
+      [new THREE.MeshLambertMaterial({ color: '#173f70' }), new THREE.MeshLambertMaterial({ color: '#173f70' }), new THREE.MeshLambertMaterial({ color: '#ffd23f' }), new THREE.MeshLambertMaterial({ color: '#173f70' }), new THREE.MeshLambertMaterial({ color: '#173f70' }), new THREE.MeshLambertMaterial({ map: tex })]);
+    // 6번째 면(-z, 홈을 바라봄)에 문구
+    wall.position.set(0, BACKWALL.h / 2, BACKWALL.z + 0.3);
+    wall.receiveShadow = true; wall.castShadow = true;
+    root.add(wall);
+  }
 
   // 관중 들썩임
   let cheer = 0;

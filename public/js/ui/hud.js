@@ -22,6 +22,7 @@ export function createHud(root, { onEmote, onMenu }) {
       <div class="bases"><i class="b2"></i><i class="b3"></i><i class="b1"></i></div>
     </div>
     <div class="role-badge"></div>
+    <div class="quip" hidden></div>
     <div class="pitch-card" hidden>
       <div class="pname"></div>
       <div class="pmeta"><span class="kmh"></span><span class="crazy"></span></div>
@@ -85,7 +86,19 @@ export function createHud(root, { onEmote, onMenu }) {
     setTimeout(() => el.remove(), 2200);
   }
 
+  let quipT = null;
+  function quip(text, ms = 2600) {
+    const el = $('.quip');
+    if (!text) { el.hidden = true; return; }
+    clearTimeout(quipT);
+    el.textContent = text;
+    el.hidden = false;
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    quipT = setTimeout(() => { el.hidden = true; }, ms);
+  }
+
   return {
+    quip,
     show(on) { root.hidden = !on; },
     setNames, setGame, setRole, showPitch, showEmote,
     setOnline(on) { $('.emote-bar').hidden = !on; },

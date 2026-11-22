@@ -63,6 +63,12 @@ input { font: inherit; -webkit-user-select: text; user-select: text; touch-actio
 .emote-float.mine { right: 30px; } .emote-float.theirs { left: 30px; }
 @keyframes floatUp { 0% { transform: translateY(0) scale(.5); opacity: 0; } 15% { transform: translateY(-20px) scale(1.2); opacity: 1; } 100% { transform: translateY(-220px) scale(1); opacity: 0; } }
 
+.quip { position: absolute; top: calc(104px + var(--safe-t)); left: 50%; transform: translateX(-50%) rotate(-2deg); max-width: min(92vw, 520px); background: #fffdf6; color: var(--ink); border: 3px solid var(--ink); border-radius: 18px; padding: 8px 16px; font-weight: 900; font-size: clamp(15px, 4vw, 21px); box-shadow: 0 5px 0 var(--ink); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.quip::after { content: ''; position: absolute; left: 50%; bottom: -12px; width: 18px; height: 18px; background: #fffdf6; border-right: 3px solid var(--ink); border-bottom: 3px solid var(--ink); transform: translateX(-50%) rotate(45deg); }
+.quip[hidden] { display: none; }
+.quip.pop { animation: quipPop .45s cubic-bezier(.2,1.8,.4,1); }
+@keyframes quipPop { from { transform: translateX(-50%) rotate(-2deg) scale(.3); opacity: 0; } }
+
 /* ───── 배너 ───── */
 #banner { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 4; }
 .banner-text { font-size: clamp(34px, 9vw, 76px); font-weight: 900; letter-spacing: -1px; color: #fff; padding: 6px 28px; transform: rotate(-4deg) scale(0); opacity: 0;

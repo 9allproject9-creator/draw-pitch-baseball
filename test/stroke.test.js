@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sanitizeStroke, boxToPlate, strokeInk, strokeMetrics, flightMs, kmh, namePitch } from '../shared/stroke.js';
 import { line, circles, zigzag, figure8, scribble } from './helpers.js';
-import { BOX, STROKE_LIMITS } from '../shared/constants.js';
+import { BOX, STROKE_LIMITS, FLIGHT } from '../shared/constants.js';
 
 const analyze = (s) => {
   const r = sanitizeStroke(s);
@@ -42,16 +42,19 @@ test('scribble is crazy', () => {
 });
 
 test('flight clamps', () => {
-  assert.equal(flightMs(sanitizeStroke(line([0.5, 0.9], [0.5, 0.5], 100)).stroke), 400);
+  assert.equal(flightMs(sanitizeStroke(line([0.5, 0.9], [0.5, 0.5], 100)).stroke), FLIGHT.minMs);
   assert.equal(flightMs(sanitizeStroke(circles(20, 0.25, 7000)).stroke), 3000);
 });
 
-test('careful slow drawing is not much slower', () => {
-  const fast = flightMs(sanitizeStroke(line([0.5, 0.9], [0.5, 0.4], 200)).stroke);
+test('faster drawing gives a faster pitch', () => {
+  const fast = flightMs(sanitizeStroke(line([0.5, 0.9], [0.5, 0.4], 150)).stroke);
+  const mid = flightMs(sanitizeStroke(line([0.5, 0.9], [0.5, 0.4], 700)).stroke);
   const slow = flightMs(sanitizeStroke(line([0.5, 0.9], [0.5, 0.4], 1500)).stroke);
-  assert.ok(slow - fast < 200, slow + ' vs ' + fast);
-  const crazy = flightMs(sanitizeStroke(circles(3, 0.12, 1500)).stroke);
-  assert.ok(crazy > fast + 300, crazy + ' vs ' + fast);
+  assert.ok(fast < mid && mid < slow, [fast, mid, slow].join(' < '));
+  assert.ok(slow - fast >= 300, 'speed difference should be noticeable: ' + (slow - fast));
+  const crazyFast = flightMs(sanitizeStroke(circles(3, 0.12, 900)).stroke);
+  const crazySlow = flightMs(sanitizeStroke(circles(3, 0.12, 3000)).stroke);
+  assert.ok(crazyFast + 400 < crazySlow, crazyFast + ' vs ' + crazySlow);
 });
 
 test('kmh', () => {
@@ -63,7 +66,7 @@ test('tap-only stroke', () => {
   const r = sanitizeStroke({ pts: [[0.5, 0.5, 0]] });
   assert.ok(r.ok);
   assert.equal(r.stroke.pts.length, 2);
-  assert.equal(flightMs(r.stroke), 400);
+  assert.equal(flightMs(r.stroke), FLIGHT.minMs);
 });
 
 test('rejects garbage', () => {

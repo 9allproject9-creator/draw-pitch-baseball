@@ -8,6 +8,8 @@ const VIEWS = {
   batter: { pos: v3(BAT_CAM), target: v3(BAT_CAM_TARGET) },
   overview: { pos: new THREE.Vector3(-26, 22, 26), target: new THREE.Vector3(0, 0, -30) },
   lobby: { pos: new THREE.Vector3(30, 9, 18), target: new THREE.Vector3(0, 2, -30) },
+  // 옆에서 홈 주변 난장판 보기 (헛스윙·사구 때)
+  chaos: { pos: new THREE.Vector3(10.5, 3.6, -3.5), target: new THREE.Vector3(-0.5, 1.6, 3.2) },
 };
 
 export function createStage(container) {

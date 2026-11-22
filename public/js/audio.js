@@ -68,6 +68,8 @@ const SOUNDS = {
   },
   ball: () => tone({ freq: 330, dur: 0.15, type: 'triangle', gain: 0.15 }),
   bonk: () => { tone({ freq: 520, freqEnd: 110, dur: 0.28, type: 'square', gain: 0.22 }); noise({ dur: 0.08, type: 'lowpass', freq: 700, gain: 0.8 }); tone({ freq: 1400, freqEnd: 1800, dur: 0.5, type: 'sine', gain: 0.07, delay: 0.15 }); },
+  boom: () => { noise({ dur: 0.9, type: 'lowpass', freq: 600, freqEnd: 60, gain: 1.0, attack: 0.005 }); tone({ freq: 90, freqEnd: 35, dur: 0.7, type: 'sine', gain: 0.8 }); },
+  thud: () => { noise({ dur: 0.18, type: 'lowpass', freq: 400, gain: 0.9, attack: 0.002 }); tone({ freq: 120, freqEnd: 50, dur: 0.18, gain: 0.6 }); },
   boing: () => tone({ freq: 180, freqEnd: 620, dur: 0.35, type: 'sine', gain: 0.18 }),
   tick: () => tone({ freq: 1500, dur: 0.03, type: 'square', gain: 0.06 }),
   pop: () => tone({ freq: 600, freqEnd: 1200, dur: 0.1, type: 'sine', gain: 0.2 }),
