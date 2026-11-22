@@ -4,59 +4,202 @@ import { BASES } from './field.js';
 
 export const TEAM_COLORS = { home: '#ff5a36', away: '#2f7dff' };
 const SKIN = ['#ffd9b3', '#f1c08f', '#d9a066', '#a8714a'];
+const HAIR = ['#2b1d14', '#4a2f1b', '#111111', '#7a4a22'];
 
-function makeChar({ color, skin = SKIN[0], role = 'fielder' }) {
+// 만화풍 3단 음영
+const TOON = (() => {
+  const d = new Uint8Array([90, 170, 255]);
+  const t = new THREE.DataTexture(d, 3, 1, THREE.RedFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+const OUTLINE = new THREE.MeshBasicMaterial({ color: '#15121a', side: THREE.BackSide });
+
+const faceCache = new Map();
+function faceTexture(skin, mood = 'happy') {
+  const key = skin + mood;
+  if (faceCache.has(key)) return faceCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = skin; g.fillRect(0, 0, 512, 256);
+  const cx = 128; // 구 UV에서 u=0.25 = 정면(+z)
+  // 볼터치
+  g.fillStyle = 'rgba(255,110,110,0.35)';
+  for (const s of [-1, 1]) { g.beginPath(); g.ellipse(cx + s * 36, 150, 15, 9, 0, 0, Math.PI * 2); g.fill(); }
+  // 눈
+  for (const s of [-1, 1]) {
+    const x = cx + s * 24;
+    g.fillStyle = '#fff'; g.beginPath(); g.ellipse(x, 120, 11, 14, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#1b1b24'; g.beginPath(); g.ellipse(x + s * 1, 123, 7.5, 10, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(x + s * 1 - 2.5, 118, 3, 0, Math.PI * 2); g.fill();
+    // 눈썹
+    g.strokeStyle = '#2a1d16'; g.lineWidth = 5; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(x - 10, 100 - (mood === 'mad' ? -s * 4 : 0)); g.lineTo(x + 10, 98 + (mood === 'mad' ? s * 4 : 0)); g.stroke();
+  }
+  // 입
+  g.strokeStyle = '#7a2b2b'; g.lineWidth = 4.5; g.lineCap = 'round';
+  g.beginPath(); g.arc(cx, 150, 13, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  faceCache.set(key, t);
+  return t;
+}
+
+function jerseyTexture(number, letter) {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 512, 256); // 흰 바탕 → 재질 색으로 팀색이 됨
+  // 옆 파이핑
+  g.fillStyle = '#d8d8d8';
+  g.fillRect(122, 0, 10, 256); g.fillRect(380, 0, 10, 256);
+  // 등번호 (u=0.5 = 등)
+  g.font = '900 120px Arial Black, Arial, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 12; g.strokeStyle = '#ffffff'; g.strokeText(String(number), 256, 118);
+  g.fillStyle = '#1a1c2c'; g.fillText(String(number), 256, 118);
+  // 가슴 글자 (u=0 = 정면, 양 끝에 나눠 그림)
+  g.font = '900 54px Arial Black, Arial, sans-serif';
+  for (const x of [0, 512]) { g.lineWidth = 8; g.strokeStyle = '#fff'; g.strokeText(letter, x, 96); g.fillStyle = '#1a1c2c'; g.fillText(letter, x, 96); }
+  // 단추 줄
+  g.fillStyle = '#9a9aa8';
+  for (const x of [0, 512]) for (let y = 130; y < 250; y += 28) { g.beginPath(); g.arc(x + (x ? -6 : 6), y, 4, 0, Math.PI * 2); g.fill(); }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+function makeChar({ color, skin = SKIN[0], role = 'fielder', outline = role !== 'fielder' }) {
   const mats = [];
-  const M = (c) => { const m = new THREE.MeshLambertMaterial({ color: c }); mats.push(m); return m; };
-  const uni = M(color), capM = M(color), skinM = M(skin), pants = M('#f4f4f0'), dark = M('#1d1d24'), glove = M('#8b4a22');
-  const mesh = (geo, mat, parent, pos) => {
+  const teamMats = [];
+  const outlines = [];
+  const M = (c, opts = {}) => { const m = new THREE.MeshToonMaterial({ color: c, gradientMap: TOON, ...opts }); mats.push(m); return m; };
+  const number = 1 + Math.floor(Math.random() * 99);
+  const isUmp = role === 'umpire';
+  const uni = M(isUmp ? '#1f2433' : color, isUmp ? {} : { map: jerseyTexture(number, 'G') });
+  const sleeveM = M(isUmp ? '#1f2433' : color);
+  const capM = M(isUmp ? '#1f2433' : color);
+  const sockM = M(isUmp ? '#1f2433' : color);
+  if (!isUmp) teamMats.push(uni, sleeveM, capM, sockM);
+  const skinM = M(skin);
+  const faceM = M('#ffffff', { map: faceTexture(skin) });
+  const hairM = M(HAIR[Math.floor(Math.random() * HAIR.length)]);
+  const pants = M(isUmp ? '#7b8090' : '#f2f1ea');
+  const dark = M('#1c1c26');
+  const sole = M('#f5f5f5');
+  const glove = M('#9a5524');
+  const gloveDark = M('#6e3a16');
+  const gear = M('#2a3350');
+
+  const add = (geo, mat, parent, pos, rot, scale, line = true) => {
     const m = new THREE.Mesh(geo, mat);
     if (pos) m.position.set(...pos);
+    if (rot) m.rotation.set(...rot);
+    if (scale) m.scale.set(...scale);
     m.castShadow = true;
     parent.add(m);
+    if (outline && line) {
+      geo.computeBoundingSphere();
+      const r = geo.boundingSphere.radius * Math.max(m.scale.x, m.scale.y, m.scale.z);
+      const k = Math.min(1.3, Math.max(1.03, 1 + 0.022 / r));
+      const o = new THREE.Mesh(geo, OUTLINE);
+      o.scale.setScalar(k);
+      o.castShadow = false;
+      m.add(o);
+      outlines.push(o);
+    }
     return m;
   };
+
   const root = new THREE.Group();
   const hips = new THREE.Group(); hips.position.y = 0.82; root.add(hips);
+  // 다리: 바지(흰) + 양말(팀색) + 스파이크
   const legs = [-1, 1].map((s) => {
     const g = new THREE.Group(); g.position.set(0.17 * s, 0, 0); hips.add(g);
-    mesh(new THREE.CapsuleGeometry(0.15, 0.42, 4, 10), pants, g, [0, -0.36, 0]);
-    mesh(new THREE.BoxGeometry(0.22, 0.12, 0.34), dark, g, [0, -0.76, 0.06]);
+    add(new THREE.CapsuleGeometry(0.16, 0.3, 6, 12), pants, g, [0, -0.25, 0]);
+    add(new THREE.CapsuleGeometry(0.12, 0.22, 6, 12), sockM, g, [0, -0.57, 0]);
+    add(new THREE.BoxGeometry(0.22, 0.11, 0.36, 1, 1, 2), dark, g, [0, -0.77, 0.06]);
+    add(new THREE.BoxGeometry(0.23, 0.03, 0.37), sole, g, [0, -0.83, 0.06], null, null, false);
+    if (role === 'catcher' || isUmp) add(new THREE.CapsuleGeometry(0.135, 0.3, 4, 10), gear, g, [0, -0.5, 0.05]);
     return g;
   });
+
+  // 몸통: 원통형 유니폼(Lathe) + 벨트
   const torso = new THREE.Group(); hips.add(torso);
-  mesh(new THREE.CapsuleGeometry(0.36, 0.34, 6, 14), uni, torso, [0, 0.4, 0]);
-  mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.08, 14), dark, torso, [0, 0.08, 0]);
-  const head = new THREE.Group(); head.position.y = 1.08; torso.add(head);
-  mesh(new THREE.SphereGeometry(0.32, 18, 14), skinM, head);
-  for (const s of [-1, 1]) mesh(new THREE.SphereGeometry(0.045, 8, 6), dark, head, [0.11 * s, 0.03, 0.29]);
-  const cap = mesh(new THREE.SphereGeometry(0.335, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), capM, head, [0, 0.06, 0]);
-  const brim = mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.04, 16, 1, false, 0, Math.PI), capM, head, [0, 0.08, 0.27]);
-  brim.rotation.y = -Math.PI / 2;
-  brim.scale.set(1, 1, 1.4);
-  if (role === 'catcher' || role === 'umpire') {
-    const mask = mesh(new THREE.TorusGeometry(0.22, 0.03, 6, 14), dark, head, [0, 0, 0.3]);
-    mask.scale.set(1, 1.2, 1);
+  const prof = [[0.001, -0.02], [0.3, 0.0], [0.36, 0.12], [0.39, 0.32], [0.41, 0.52], [0.38, 0.66], [0.26, 0.76], [0.001, 0.8]].map(([x, y]) => new THREE.Vector2(x, y));
+  add(new THREE.LatheGeometry(prof, 28), uni, torso, [0, 0.06, 0]);
+  add(new THREE.CylinderGeometry(0.35, 0.35, 0.08, 24), dark, torso, [0, 0.12, 0], null, null, false);
+  add(new THREE.BoxGeometry(0.1, 0.08, 0.04), M('#d9b44a'), torso, [0, 0.12, 0.35], null, null, false);
+  if (role === 'catcher' || isUmp) add(new THREE.BoxGeometry(0.62, 0.55, 0.16, 2, 2, 1), gear, torso, [0, 0.45, 0.33], null, [1, 1, 1]);
+
+  // 머리: 얼굴 텍스처 + 귀 + 머리카락 + 모자/헬멧
+  const head = new THREE.Group(); head.position.y = 1.1; torso.add(head);
+  add(new THREE.SphereGeometry(0.33, 32, 20), faceM, head);
+  for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.075, 10, 8), skinM, head, [0.32 * s, -0.02, 0], null, [0.6, 1, 0.8]);
+  add(new THREE.SphereGeometry(0.335, 24, 12, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.32), hairM, head, [0, 0, -0.02], [0.25, 0, 0], null, false);
+  let cap, brim;
+  if (role === 'batter' || role === 'runner') {
+    // 타자 헬멧: 광택 + 귀덮개
+    const helmM = new THREE.MeshStandardMaterial({ color, roughness: 0.25, metalness: 0.1 });
+    mats.push(helmM); teamMats.push(helmM);
+    cap = add(new THREE.SphereGeometry(0.37, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), helmM, head, [0, 0.04, -0.01]);
+    brim = add(new THREE.CylinderGeometry(0.2, 0.2, 0.035, 18, 1, false, 0, Math.PI), helmM, head, [0, 0.03, 0.3], [0, -Math.PI / 2, 0], [1, 1, 1.25]);
+    add(new THREE.SphereGeometry(0.16, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2), helmM, head, [-0.3, -0.06, 0.02], [0, 0, Math.PI / 2], [1, 0.6, 1]);
+  } else {
+    cap = add(new THREE.SphereGeometry(0.345, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), capM, head, [0, 0.06, 0]);
+    brim = add(new THREE.CylinderGeometry(0.21, 0.21, 0.035, 18, 1, false, 0, Math.PI), capM, head, [0, 0.07, 0.28], [0.12, -Math.PI / 2, 0], [1, 1, 1.45]);
+    add(new THREE.SphereGeometry(0.035, 8, 6), capM, head, [0, 0.4, 0], null, null, false);
+    if (!isUmp) {
+      const lt = document.createElement('canvas'); lt.width = lt.height = 64;
+      const lg = lt.getContext('2d'); lg.font = '900 50px Arial Black, Arial'; lg.textAlign = 'center'; lg.textBaseline = 'middle';
+      lg.lineWidth = 6; lg.strokeStyle = '#1a1c2c'; lg.strokeText('G', 32, 34); lg.fillStyle = '#fff'; lg.fillText('G', 32, 34);
+      const tex = new THREE.CanvasTexture(lt); tex.colorSpace = THREE.SRGBColorSpace;
+      const logoM = new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5 });
+      mats.push(logoM);
+      const logo = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.15), logoM);
+      logo.position.set(0, 0.22, 0.3); logo.rotation.x = -0.45;
+      head.add(logo);
+    }
   }
+  if (role === 'catcher' || isUmp) {
+    const cage = new THREE.Group(); cage.position.set(0, -0.02, 0.31); head.add(cage);
+    add(new THREE.TorusGeometry(0.2, 0.022, 6, 18), dark, cage, null, null, [1, 1.2, 1], false);
+    for (const y of [-0.08, 0, 0.08]) add(new THREE.BoxGeometry(0.34, 0.02, 0.02), dark, cage, [0, y, 0.02], null, null, false);
+    add(new THREE.BoxGeometry(0.02, 0.4, 0.02), dark, cage, [0, 0, 0.03], null, null, false);
+  }
+
+  // 팔: 소매(팀색) + 팔뚝 + 손 / 왼손 글러브
   const arms = [-1, 1].map((s) => {
-    const g = new THREE.Group(); g.position.set(0.46 * s, 0.62, 0); torso.add(g);
-    mesh(new THREE.CapsuleGeometry(0.11, 0.36, 4, 10), uni, g, [0, -0.26, 0]);
-    const hand = mesh(new THREE.SphereGeometry(0.12, 10, 8), s < 0 && role !== 'umpire' ? glove : skinM, g, [0, -0.56, 0]);
-    if (s < 0 && role !== 'umpire') hand.scale.set(1.5, 1.5, 1.1);
+    const g = new THREE.Group(); g.position.set(0.46 * s, 0.64, 0); torso.add(g);
+    add(new THREE.SphereGeometry(0.15, 14, 10), sleeveM, g, [0, -0.02, 0]);
+    add(new THREE.CapsuleGeometry(0.115, 0.14, 4, 10), sleeveM, g, [0, -0.16, 0]);
+    add(new THREE.CapsuleGeometry(0.095, 0.2, 4, 10), skinM, g, [0, -0.36, 0]);
+    if (s < 0 && !isUmp && role !== 'batter' && role !== 'runner') {
+      const gl = new THREE.Group(); gl.position.set(0, -0.58, 0.02); g.add(gl);
+      add(new THREE.SphereGeometry(0.15, 14, 10), glove, gl, null, null, [1.25, 1.35, 0.75]);
+      add(new THREE.CapsuleGeometry(0.05, 0.12, 4, 8), gloveDark, gl, [0.13, 0.02, 0.03], [0, 0, -0.5], null, false);
+      add(new THREE.BoxGeometry(0.2, 0.12, 0.04), gloveDark, gl, [0, 0.12, 0.06], null, null, false);
+    } else {
+      add(new THREE.SphereGeometry(0.1, 12, 10), skinM, g, [0, -0.55, 0]);
+    }
     return g;
   });
-  if (role === 'umpire') { uni.color.set('#22252f'); capM.color.set('#22252f'); pants.color.set('#6b6f7a'); }
 
   let bat = null;
   if (role === 'batter') {
     bat = new THREE.Group();
-    const wood = M('#d9a86c');
-    const b = mesh(new THREE.CylinderGeometry(0.045, 0.022, 0.95, 10), wood, bat, [0, 0.47, 0]);
-    b.castShadow = true;
+    const wood = new THREE.MeshStandardMaterial({ color: '#d9a86c', roughness: 0.4 });
+    mats.push(wood);
+    const pts = [[0.001, 0], [0.022, 0.0], [0.024, 0.02], [0.018, 0.04], [0.02, 0.3], [0.035, 0.6], [0.047, 0.85], [0.045, 0.94], [0.001, 0.95]].map(([x, y]) => new THREE.Vector2(x, y));
+    add(new THREE.LatheGeometry(pts, 14), wood, bat, [0, 0, 0]);
+    add(new THREE.CylinderGeometry(0.023, 0.023, 0.2, 10), dark, bat, [0, 0.12, 0], null, null, false);
     torso.add(bat);
   }
-  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  return { root, hips, torso, head, legs, arms, bat, uni, capM, mats, role, cap, brim, anim: { run: 0 } };
+  return { root, hips, torso, head, legs, arms, bat, uni, capM, mats, teamMats, outlines, role, cap, brim, anim: { run: 0 } };
 }
 
 function setGhost(c, on) {
@@ -65,7 +208,8 @@ function setGhost(c, on) {
     m.opacity = on ? 0.28 : 1;
     m.depthWrite = !on;
   }
-  c.root.traverse((o) => { if (o.isMesh) o.castShadow = !on; });
+  for (const o of c.outlines) o.visible = !on;
+  c.root.traverse((o) => { if (o.isMesh && o.material !== OUTLINE) o.castShadow = !on; });
 }
 
 function resetPose(c) {
@@ -168,7 +312,7 @@ export function createPlayers(scene) {
   const add = (opts, pos) => { const c = makeChar(opts); c.root.position.copy(pos); scene.add(c.root); all.push(c); return c; };
 
   const pitcher = add({ color: TEAM_COLORS.home, role: 'pitcher', skin: SKIN[1] }, new THREE.Vector3(0, 0.25, RUBBER_Z + 0.2));
-  const batter = add({ color: TEAM_COLORS.away, role: 'batter', skin: SKIN[2] }, new THREE.Vector3(-0.95, 0, 0.05));
+  const batter = add({ color: TEAM_COLORS.away, role: 'batter', skin: SKIN[2] }, new THREE.Vector3(-1.15, 0, 0.05));
   batter.root.rotation.y = Math.PI / 2;
   const catcher = add({ color: TEAM_COLORS.home, role: 'catcher', skin: SKIN[0] }, new THREE.Vector3(0, 0, CATCHER_Z + 0.25));
   catcher.root.rotation.y = Math.PI;
@@ -203,7 +347,7 @@ export function createPlayers(scene) {
   let cele = null;    // 투수 세리머니
   let stomp = null;   // 타자 발 구르기
   const flyers = [];  // 날아가는 모자/배트
-  const BATTER_HOME = new THREE.Vector3(-0.95, 0, 0.05);
+  const BATTER_HOME = new THREE.Vector3(-1.15, 0, 0.05);
   const stars = new THREE.Group();
   for (let i = 0; i < 3; i++) {
     const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), new THREE.MeshBasicMaterial({ color: '#ffe14d' }));
@@ -238,8 +382,8 @@ export function createPlayers(scene) {
   function setTeams({ batting, fielding }) {
     teams = { batting, fielding };
     const fc = new THREE.Color(TEAM_COLORS[fielding]), bc = new THREE.Color(TEAM_COLORS[batting]);
-    for (const c of [pitcher, catcher, ...Object.values(fielders)]) { c.uni.color.copy(fc); c.capM.color.copy(fc); }
-    for (const c of [batter, ...runners]) { c.uni.color.copy(bc); c.capM.color.copy(bc); }
+    for (const c of [pitcher, catcher, ...Object.values(fielders)]) c.teamMats.forEach((m) => m.color.copy(fc));
+    for (const c of [batter, ...runners]) c.teamMats.forEach((m) => m.color.copy(bc));
   }
 
   function resetField() {
@@ -275,7 +419,7 @@ export function createPlayers(scene) {
     runners.forEach((r) => { r.root.visible = false; r.runPath = null; });
     from.forEach((b, idx) => {
       const r = runners[idx];
-      const start = b === -1 ? new THREE.Vector3(-0.95, 0, 0.05) : BASE_PATH[b + 1].clone();
+      const start = b === -1 ? new THREE.Vector3(-1.15, 0, 0.05) : BASE_PATH[b + 1].clone();
       r.root.position.copy(start);
       r.root.visible = true;
       if (idx >= to.length) { r.fade = 1; r.runPath = null; return; } // 아웃된 주자

@@ -66,42 +66,71 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
     const p = stage.plateRayFromScreen(px, py);
     if (!p) return null;
     const b = plateToBox(p.x, p.y);
-    return [Math.min(1, Math.max(0, b.u)), Math.min(1, Math.max(0, b.v))];
+    return [Math.min(STROKE_LIMITS.uvMax, Math.max(STROKE_LIMITS.uvMin, b.u)), Math.min(STROKE_LIMITS.uvMax, Math.max(STROKE_LIMITS.uvMin, b.v))];
   };
   const toScreen = (u, v) => { const p = boxToPlate(u, v); return proj(stage, p.x, p.y); };
 
-  // 그림판처럼: 선은 전용 저지연 캔버스에 포인터 이벤트 즉시 그림
-  const inkCanvas = document.getElementById('ink');
-  let inkCtx = null;
-  try { inkCtx = inkCanvas.getContext('2d', { desynchronized: true }); } catch { inkCtx = inkCanvas.getContext('2d'); }
+  // 그림판처럼: 선은 전용 캔버스 2장(빛 번짐 + 흰 선)에 새로 생긴 부분만 이어 그림 (프레임당 1번)
+  const coreCanvas = document.getElementById('ink');
+  const glowCanvas = document.getElementById('inkGlow');
+  const mk = (cv) => { try { return cv.getContext('2d', { desynchronized: true }); } catch { return cv.getContext('2d'); } };
+  const coreCtx = mk(coreCanvas), glowCtx = mk(glowCanvas);
   let inkDpr = 1;
   const sizeInk = () => {
     inkDpr = Math.min(window.devicePixelRatio || 1, 2);
     const { width, height } = stage.size;
-    inkCanvas.width = Math.round(width * inkDpr); inkCanvas.height = Math.round(height * inkDpr);
+    for (const cv of [coreCanvas, glowCanvas]) { cv.width = Math.round(width * inkDpr); cv.height = Math.round(height * inkDpr); }
   };
-  stage.onResize(() => { sizeInk(); if (drawing) inkRedraw(); });
+  stage.onResize(() => { sizeInk(); drawnUpTo = 0; if (drawing) scheduleInk(); });
   sizeInk();
   let spts = []; // 화면 좌표 (pts와 같은 순서)
-  function inkClear() { inkCtx.setTransform(1, 0, 0, 1, 0, 0); inkCtx.clearRect(0, 0, inkCanvas.width, inkCanvas.height); }
-  function inkRedraw() {
-    inkClear();
-    if (!spts.length) return;
-    const g = inkCtx;
-    g.setTransform(inkDpr, 0, 0, inkDpr, 0, 0);
+  let drawnUpTo = 0; // spts 중 이미 그린 마지막 인덱스
+  let inkPending = false;
+  function inkClear() {
+    for (const g of [coreCtx, glowCtx]) { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, coreCanvas.width, coreCanvas.height); }
+    drawnUpTo = 0;
+  }
+  function scheduleInk() {
+    if (inkPending) return;
+    inkPending = true;
+    requestAnimationFrame(() => { inkPending = false; if (drawing) inkDraw(); });
+  }
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  // 중간점 2차 곡선을 이어 그림: i번째 조각 = mid(i-1,i) → mid(i,i+1), 제어점 i
+  function inkDraw() {
+    const n = spts.length;
+    if (!n) return;
     const { width, height } = stage.size;
     const pen = Math.max(4, Math.min(width, height) * 0.012);
-    const path = () => {
+    if (drawnUpTo === 0) {
+      for (const [g, w, col, al] of [[glowCtx, pen * 2.2, penColor, 1], [coreCtx, pen, '#fff', 1]]) {
+        g.setTransform(inkDpr, 0, 0, inkDpr, 0, 0);
+        g.globalAlpha = al; g.fillStyle = col;
+        g.beginPath(); g.arc(spts[0][0], spts[0][1], w / 2, 0, Math.PI * 2); g.fill();
+      }
+      drawnUpTo = 0;
+    }
+    if (n < 2) return;
+    const from = Math.max(1, drawnUpTo);
+    const to = n - 1; // 마지막 점은 다음 점이 올 때 곡선으로 확정
+    for (const [g, w, col, al] of [[glowCtx, pen * 2.2, penColor, 1], [coreCtx, pen, '#fff', 1]]) {
+      g.setTransform(inkDpr, 0, 0, inkDpr, 0, 0);
+      g.globalAlpha = al;
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      g.strokeStyle = col; g.lineWidth = w;
       g.beginPath();
-      g.moveTo(spts[0][0], spts[0][1]);
-      if (spts.length < 3) { for (let i = 1; i < spts.length; i++) g.lineTo(spts[i][0], spts[i][1]); if (spts.length === 1) g.lineTo(spts[0][0] + 0.1, spts[0][1]); return; }
-      for (let i = 1; i < spts.length - 1; i++) g.quadraticCurveTo(spts[i][0], spts[i][1], (spts[i][0] + spts[i + 1][0]) / 2, (spts[i][1] + spts[i + 1][1]) / 2);
-      const L = spts[spts.length - 1]; g.lineTo(L[0], L[1]);
-    };
-    g.lineCap = 'round'; g.lineJoin = 'round';
-    g.globalAlpha = 0.4; path(); g.strokeStyle = penColor; g.lineWidth = pen * 2.2; g.stroke();
-    g.globalAlpha = 1; path(); g.strokeStyle = '#fff'; g.lineWidth = pen; g.stroke();
+      let start = from === 1 ? spts[0] : mid(spts[from - 1], spts[from]);
+      g.moveTo(start[0], start[1]);
+      for (let i = from; i < to; i++) {
+        const m = mid(spts[i], spts[i + 1]);
+        g.quadraticCurveTo(spts[i][0], spts[i][1], m[0], m[1]);
+      }
+      g.stroke();
+    }
+    drawnUpTo = Math.max(from, to);
+    // 마지막 조각은 임시로 직선 연결 (다음 프레임에 곡선으로 덮임)
   }
+  function inkRedraw() { drawnUpTo = 0; inkClear(); inkDraw(); }
 
   let ink = 0;
   const seg = (a, b) => { const p = boxToPlate(a[0], a[1]), q = boxToPlate(b[0], b[1]); return Math.hypot(p.x - q.x, p.y - q.y); };
@@ -126,7 +155,11 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
     const t = Math.max(0, (e.timeStamp || performance.now()) - t0);
     const last = pts[pts.length - 1];
     const ls = spts[spts.length - 1];
-    if (last && pts.length > 1 && ls && Math.hypot(e.clientX - ls[0], e.clientY - ls[1]) < 2) {
+    if (last && ls && Math.hypot(e.clientX - ls[0], e.clientY - ls[1]) < 2.5) {
+      last[2] = Math.max(last[2], t);
+      return;
+    }
+    if (false) {
       const prev = pts[pts.length - 2];
       ink -= seg(prev, last);
       last[0] = b[0]; last[1] = b[1]; last[2] = Math.max(last[2], t);
@@ -162,14 +195,14 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
     t0 = e.timeStamp || performance.now();
     stage.setRenderPaused(true);
     addPoint(e);
-    if (drawing) inkRedraw();
+    if (drawing) scheduleInk();
   };
   const onMove = (e) => {
     if (!drawing || e.pointerId !== pointerId) return;
     if (e.cancelable && e.type === 'pointermove') e.preventDefault();
     const list = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of (list.length ? list : [e])) { if (drawing) addPoint(ev); }
-    if (drawing) inkRedraw();
+    if (drawing) scheduleInk();
   };
   const onUp = (e) => { if (drawing && e.pointerId === pointerId) { e.preventDefault(); addPoint(e); finish(); } };
 
@@ -177,7 +210,7 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
   // pointerrawupdate: 크롬에서 마우스 움직임을 프레임 기다리지 않고 바로 받음
   const RAW = 'onpointerrawupdate' in window;
   overlay.canvas.addEventListener('pointermove', onMove, { passive: false });
-  if (RAW) overlay.canvas.addEventListener('pointerrawupdate', onMove, { passive: true });
+
   overlay.canvas.addEventListener('pointerup', onUp, { passive: false });
   overlay.canvas.addEventListener('pointercancel', onUp, { passive: false });
 
@@ -203,20 +236,6 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
     if (active) {
       const box = polyFor(stage, BOX);
       const zone = polyFor(stage, ZONE);
-      // 박스 밖 살짝 어둡게
-      g.save();
-      g.fillStyle = 'rgba(0,0,0,0.28)';
-      g.fillRect(0, 0, W, H);
-      g.globalCompositeOperation = 'destination-out';
-      roundPoly(g, box, 18); g.fill();
-      g.restore();
-      // 박스 테두리
-      g.save();
-      g.setLineDash([12, 10]);
-      g.lineWidth = 3;
-      g.strokeStyle = 'rgba(255,255,255,0.9)';
-      roundPoly(g, box, 18); g.stroke();
-      g.restore();
       // 스트라이크 존
       g.save();
       g.fillStyle = 'rgba(255,210,63,0.13)';

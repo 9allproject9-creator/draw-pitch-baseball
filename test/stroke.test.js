@@ -73,13 +73,14 @@ test('rejects garbage', () => {
   assert.equal(sanitizeStroke({ pts: [] }).ok, false);
 });
 
-test('clamps coordinates and downsamples', () => {
+test('drawing outside the box is kept, absurd values clamped, downsampled', () => {
   const pts = [];
-  for (let i = 0; i < 2000; i++) pts.push([i % 2 ? 1.5 : -0.5, 0.5, i]);
+  for (let i = 0; i < 2000; i++) pts.push([i % 2 ? 1.5 : -0.5, i === 7 ? 99 : 0.5, i]);
   const r = sanitizeStroke({ pts });
   assert.ok(r.ok);
   assert.ok(r.stroke.pts.length <= 600);
-  for (const [u, v] of r.stroke.pts) { assert.ok(u >= 0 && u <= 1); assert.ok(v >= 0 && v <= 1); }
+  assert.ok(r.stroke.pts.some(([u]) => u === 1.5 || u === -0.5));
+  for (const [u, v] of r.stroke.pts) { assert.ok(u >= STROKE_LIMITS.uvMin && u <= STROKE_LIMITS.uvMax); assert.ok(v >= STROKE_LIMITS.uvMin && v <= STROKE_LIMITS.uvMax); }
 });
 
 test('ink limit cuts stroke', () => {

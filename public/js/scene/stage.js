@@ -95,7 +95,7 @@ export function createStage(container) {
       camera.lookAt(curTarget);
       return;
     }
-    trans = { fromPos: camera.position.clone(), fromTarget: curTarget.clone(), toPos: v.pos.clone(), toTarget: v.target.clone(), t: 0, dur: duration };
+    trans = { fromPos: camera.position.clone(), fromTarget: curTarget.clone(), toPos: v.pos.clone(), toTarget: v.target.clone(), t: 0, dur: duration, start: performance.now() };
   }
 
   function followTarget(obj) {
@@ -110,7 +110,7 @@ export function createStage(container) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     if (trans) {
-      trans.t += dt / trans.dur;
+      trans.t = (now - trans.start) / 1000 / trans.dur; // 실제 경과 시간 기준
       const k = trans.t >= 1 ? 1 : 1 - Math.pow(1 - trans.t, 3);
       camera.position.lerpVectors(trans.fromPos, trans.toPos, k);
       curTarget.lerpVectors(trans.fromTarget, trans.toTarget, k);

@@ -5,14 +5,16 @@ export const PITCH_CAM = { x: 0, y: 2.9, z: -23.5 };
 export const PITCH_CAM_TARGET = { x: 0, y: 0.85, z: 0 };
 export const BAT_CAM = { x: 0, y: 1.5, z: 4.6 };
 export const BAT_CAM_TARGET = { x: 0, y: 1.0, z: -18 };
-export const ZONE = { xMin: -0.216, xMax: 0.216, yMin: 0.48, yMax: 1.07 };
+// 게임용 스트라이크 존 (실제보다 약 2배 — 화면에서 잘 보이고 노리기 쉽게)
+export const ZONE = { xMin: -0.42, xMax: 0.42, yMin: 0.32, yMax: 1.36 };
 export const BALL_R = 0.037;
-export const BOX = { xMin: -2.0, xMax: 2.0, yMin: -0.05, yMax: 2.9 };
+export const BOX = { xMin: -1.8, xMax: 1.8, yMin: -0.05, yMax: 2.6 };
 export const CATCHER_Z = 0.85;
 // 우타자 몸통 (사구 판정용 원기둥)
-export const BATTER = { x: -0.95, z: 0.05, r: 0.36, yMin: 0.15, yMax: 1.95 };
+export const BATTER = { x: -1.15, z: 0.05, r: 0.36, yMin: 0.15, yMax: 1.95 };
 export const HIT_ZONE = { zMin: -1.15, zMax: 0.45, ideal: -0.35 };
-export const STROKE_LIMITS = { maxPoints: 600, minDurationMs: 60, maxDurationMs: 20000, inkMax: 5000, clockMs: 15000 };
+// uvMin/uvMax: 그리기 제한 없음 (박스는 카메라 구도용). 서버 안전 범위만 둠
+export const STROKE_LIMITS = { uvMin: -2, uvMax: 3, maxPoints: 600, minDurationMs: 60, maxDurationMs: 20000, inkMax: 5000, clockMs: 15000 };
 // 비행 시간 = base + 선 길이(m)×perMeter + 그린 시간×drawFactor (공은 선을 따라 일정한 속도로 이동)
 export const FLIGHT = { base: 250, perMeter: 100, drawFactor: 0.12, minMs: 400, maxMs: 3000, speedDistance: 17.2, blendFrac: 0.08 };
 export const CONTACT = { dPerfect: 0.06, dMax: 0.30, timingHalf: 0.8 };

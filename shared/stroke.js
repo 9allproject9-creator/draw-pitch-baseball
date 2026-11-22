@@ -33,7 +33,7 @@ export function sanitizeStroke(raw) {
     if (!Array.isArray(p) || p.length < 3) return { ok: false, reason: 'bad point' };
     const [u, v, t] = p;
     if (![u, v, t].every((n) => typeof n === 'number' && Number.isFinite(n))) return { ok: false, reason: 'bad number' };
-    pts.push([clamp(u, 0, 1), clamp(v, 0, 1), t]);
+    pts.push([clamp(u, STROKE_LIMITS.uvMin, STROKE_LIMITS.uvMax), clamp(v, STROKE_LIMITS.uvMin, STROKE_LIMITS.uvMax), t]);
   }
   // 시간: 0부터, 단조 증가
   const t0 = pts[0][2];

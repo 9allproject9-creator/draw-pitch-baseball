@@ -8,7 +8,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0e2a1b; col
 #stage, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
 #stage canvas { display: block; }
 #overlay { pointer-events: none; touch-action: none; z-index: 2; }
-#ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+#inkGlow { opacity: 0.45; }
+.ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
 #overlay.active { pointer-events: auto; cursor: crosshair; }
 button { font: inherit; color: inherit; touch-action: manipulation; }
 input { font: inherit; -webkit-user-select: text; user-select: text; touch-action: manipulation; }
