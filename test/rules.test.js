@@ -130,3 +130,10 @@ test('pitch info updates fielding stats', () => {
   assert.equal(game.stats.home.maxKmh, 140);
   assert.deepEqual(game.stats.home.craziest, { name: '회오리볼 ×2', craziness: 0.5 });
 });
+
+test('hit by pitch forces runners like a walk', () => {
+  const { g, events } = run(withState({ bases: [true, false, false], balls: 1, strikes: 2 }), ['HBP']);
+  assert.deepEqual(g.bases, [true, true, false]);
+  assert.equal(g.balls, 0); assert.equal(g.strikes, 0);
+  assert.ok(events.some((e) => e.type === 'hbp'));
+});

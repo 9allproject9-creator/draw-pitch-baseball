@@ -67,6 +67,8 @@ const SOUNDS = {
     SOUNDS.cheer();
   },
   ball: () => tone({ freq: 330, dur: 0.15, type: 'triangle', gain: 0.15 }),
+  bonk: () => { tone({ freq: 520, freqEnd: 110, dur: 0.28, type: 'square', gain: 0.22 }); noise({ dur: 0.08, type: 'lowpass', freq: 700, gain: 0.8 }); tone({ freq: 1400, freqEnd: 1800, dur: 0.5, type: 'sine', gain: 0.07, delay: 0.15 }); },
+  boing: () => tone({ freq: 180, freqEnd: 620, dur: 0.35, type: 'sine', gain: 0.18 }),
   tick: () => tone({ freq: 1500, dur: 0.03, type: 'square', gain: 0.06 }),
   pop: () => tone({ freq: 600, freqEnd: 1200, dur: 0.1, type: 'sine', gain: 0.2 }),
   win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone({ freq: f, dur: 0.3, type: 'triangle', gain: 0.15, delay: i * 0.12 })),

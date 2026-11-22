@@ -1,4 +1,4 @@
-import { BAT_CAM, HIT_ZONE, CONTACT, DIFFICULTY } from './constants.js';
+import { BAT_CAM, HIT_ZONE, CONTACT, DIFFICULTY, BATTER, BALL_R } from './constants.js';
 import { timeAtZ } from './trajectory.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -69,6 +69,7 @@ export function hitFlight(outcome, timing, rng) {
     case '2B': return { kind: 'line', spray: fairSpray(), distance: R(rng, 75, 100), apex: R(rng, 6, 14), hangMs: 1900 };
     case '3B': return { kind: 'fly', spray: fairSpray(), distance: R(rng, 95, 115), apex: R(rng, 12, 22), hangMs: 2400 };
     case 'HR': return { kind: 'hr', spray: fairSpray(), distance: R(rng, 110, 140), apex: R(rng, 30, 45), hangMs: 3200 };
+    case 'HBP': return { kind: 'bounce', spray: R(rng, 150, 210), distance: R(rng, 2, 4), apex: R(rng, 0.8, 1.6), hangMs: 700 };
     case 'FOUL': {
       const side = timing !== 0 ? Math.sign(timing) : (rng() < 0.5 ? -1 : 1);
       return { kind: 'foul', spray: side * R(rng, 50, 80), distance: R(rng, 20, 60), apex: R(rng, 5, 20), hangMs: 1800 };
@@ -80,4 +81,16 @@ export function hitFlight(outcome, timing, rng) {
 export function aiSwingTime(path, contact, rng) {
   const t = timeAtZ(path, HIT_ZONE.ideal);
   return contact ? t : t + (rng() < 0.5 ? -1 : 1) * R(rng, 40, 120);
+}
+
+// 공이 타자 몸에 맞는 시각 (없으면 null). untilT 이전까지만 확인
+export function findHbp(path, untilT = Infinity) {
+  const t0 = Math.max(0, timeAtZ(path, BATTER.z - 0.8));
+  const t1 = Math.min(untilT, path.catchMs);
+  for (let t = t0; t <= t1; t += 6) {
+    const P = path.positionAt(t);
+    if (P.y < BATTER.yMin || P.y > BATTER.yMax) continue;
+    if (Math.hypot(P.x - BATTER.x, P.z - BATTER.z) < BATTER.r + BALL_R) return t;
+  }
+  return null;
 }

@@ -6,7 +6,7 @@ import { generateAiStroke } from '/shared/aiPitcher.js';
 import { createRng, hashSeed } from '/shared/rng.js';
 import { RESULT_MS, HALF_BANNER_MS, STROKE_LIMITS } from '/shared/constants.js';
 
-const LEAD = 900;
+const LEAD = 0; // 떼는 순간 바로 출발
 
 // AI 대전 매치 소스. 온라인 매치와 같은 이벤트/메서드를 제공한다.
 export function createLocalMatch({ innings = 3, difficulty = 'normal', myTeam = 'away', names }) {
@@ -52,7 +52,7 @@ export function createLocalMatch({ innings = 3, difficulty = 'normal', myTeam = 
     if (battingTeam(game) === aiTeam) {
       // AI 타자: 결과는 미리 계산하고, 스윙/도착 시점에 알린다
       const res = compute(clean.stroke, { type: 'ai', difficulty });
-      const at = res.swingT != null ? Math.min(res.swingT, path.T) : path.T;
+      const at = res.hbpT != null ? res.hbpT : res.swingT != null ? Math.min(res.swingT, path.T) : path.T;
       later(() => publish(res), Math.max(0, startNow + at - performance.now() - 20));
     } else {
       later(() => { if (phase === 'flight' && cur && !cur.swung) { cur.swung = true; resolve(cur.stroke, { type: 'take' }); } }, LEAD + path.catchMs + 2500);

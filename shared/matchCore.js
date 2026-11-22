@@ -1,7 +1,7 @@
 import { createRng } from './rng.js';
 import { sanitizeStroke, strokeMetrics, kmh, namePitch } from './stroke.js';
 import { buildPath } from './trajectory.js';
-import { evalHumanSwing, outcomeFromQuality, aiBatter, hitFlight, aiSwingTime } from './contact.js';
+import { evalHumanSwing, outcomeFromQuality, aiBatter, hitFlight, aiSwingTime, findHbp } from './contact.js';
 import { applyOutcome } from './rules.js';
 
 // 한 투구의 전체 판정. 서버(온라인)와 브라우저(AI 대전)가 같이 쓴다.
@@ -31,7 +31,7 @@ export function resolvePitch({ game, stroke, swing, seed }) {
     };
   }
   const { path, pitch } = describePitch(clean.stroke);
-  let outcome, contact = null, swingT = null;
+  let outcome, contact = null, swingT = null, hbpT = null;
 
   if (!swing || swing.type === 'take') {
     outcome = pitch.inZone ? 'TAKE_STRIKE' : 'TAKE_BALL';
@@ -59,7 +59,11 @@ export function resolvePitch({ game, stroke, swing, seed }) {
     outcome = pitch.inZone ? 'TAKE_STRIKE' : 'TAKE_BALL';
   }
 
-  const flight = contact ? hitFlight(outcome, contact.timing, rng) : null;
+  // 사구: 배트에 맞기 전에 공이 몸에 닿으면 몸에 맞는 공
+  const hitAt = contact && swingT != null ? swingT : Infinity;
+  const hb = findHbp(path, hitAt);
+  if (hb != null) { outcome = 'HBP'; hbpT = hb; contact = null; if (swing && swing.type === 'ai') swingT = null; }
+  const flight = contact ? hitFlight(outcome, contact.timing, rng) : outcome === 'HBP' ? hitFlight('HBP', 0, rng) : null;
   const { game: next, events } = applyOutcome(game, outcome, rng, { kmh: pitch.kmh, name: pitch.name, craziness: pitch.craziness });
-  return { pitch, outcome, contact, swingT, flight, events, game: next };
+  return { pitch, outcome, contact, swingT, hbpT, flight, events, game: next };
 }

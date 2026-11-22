@@ -70,7 +70,9 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
   };
   const toScreen = (u, v) => { const p = boxToPlate(u, v); return proj(stage, p.x, p.y); };
 
-  function inkUsed() { return pts.length > 1 ? strokeInk({ pts }) : 0; }
+  let ink = 0;
+  const seg = (a, b) => { const p = boxToPlate(a[0], a[1]), q = boxToPlate(b[0], b[1]); return Math.hypot(p.x - q.x, p.y - q.y); };
+  function inkUsed() { return ink; }
 
   function finish() {
     if (!drawing && !pts.length) return;
@@ -88,8 +90,15 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
     if (!b) return;
     const t = Math.max(0, (e.timeStamp || performance.now()) - t0);
     const last = pts[pts.length - 1];
-    if (last && t - last[2] < 8 && pts.length > 1) { last[0] = b[0]; last[1] = b[1]; last[2] = Math.max(last[2], t); }
-    else pts.push([b[0], b[1], last ? Math.max(t, last[2]) : 0]);
+    if (last && t - last[2] < 8 && pts.length > 1) {
+      const prev = pts[pts.length - 2];
+      ink -= seg(prev, last);
+      last[0] = b[0]; last[1] = b[1]; last[2] = Math.max(last[2], t);
+      ink += seg(prev, last);
+    } else {
+      if (last) ink += seg(last, b);
+      pts.push([b[0], b[1], last ? Math.max(t, last[2]) : 0]);
+    }
     if (inkUsed() >= STROKE_LIMITS.inkMax || t >= STROKE_LIMITS.maxDurationMs) finish();
   }
 
@@ -107,6 +116,7 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
     drawing = true;
     hint = false;
     pts = [];
+    ink = 0;
     t0 = e.timeStamp || performance.now();
     addPoint(e);
   };
@@ -244,9 +254,10 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
       const prog = startNow == null ? -1 : Math.min(1, Math.max(0, (now - startNow) / T));
       g.save();
       g.lineCap = 'round'; g.lineJoin = 'round';
-      g.globalAlpha = 0.45 * alpha;
-      strokePath(g, stroke.pts); g.strokeStyle = '#ffffff'; g.lineWidth = pen * 0.7; g.setLineDash([pen * 1.2, pen * 1.2]); g.stroke();
-      g.setLineDash([]);
+      g.globalAlpha = 0.35 * alpha;
+      strokePath(g, stroke.pts); g.strokeStyle = penColor; g.lineWidth = pen * 2.2; g.stroke();
+      g.globalAlpha = 0.95 * alpha;
+      strokePath(g, stroke.pts); g.strokeStyle = '#ffffff'; g.lineWidth = pen; g.stroke();
       if (prog > 0) {
         g.globalAlpha = 0.9 * alpha;
         const lim = prog * total;
@@ -257,7 +268,7 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
           if (a) part.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, 0]);
           break;
         }
-        strokePath(g, part); g.strokeStyle = penColor; g.lineWidth = pen * 1.1; g.stroke();
+        strokePath(g, part); g.strokeStyle = penColor; g.lineWidth = pen * 1.25; g.stroke();
       }
       g.restore();
     }

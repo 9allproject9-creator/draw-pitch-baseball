@@ -30,6 +30,7 @@ export function createStage(container) {
   let viewName = 'lobby';
   let trans = null; // {fromPos, fromTarget, toPos, toTarget, t, dur}
   let follow = null;
+  let shake = 0;
   const frameCbs = [];
   const resizeCbs = [];
   const raycaster = new THREE.Raycaster();
@@ -120,6 +121,12 @@ export function createStage(container) {
       curTarget.lerp(p, 1 - Math.pow(0.0005, dt));
     }
     camera.lookAt(curTarget);
+    if (shake > 0.001) {
+      shake *= Math.pow(0.02, dt);
+      camera.rotation.z += (Math.random() - 0.5) * shake * 0.06;
+      camera.rotation.x += (Math.random() - 0.5) * shake * 0.03;
+      camera.rotation.y += (Math.random() - 0.5) * shake * 0.03;
+    }
     for (const cb of frameCbs) cb(dt, now);
     renderer.render(scene, camera);
     requestAnimationFrame(loop);
@@ -132,6 +139,7 @@ export function createStage(container) {
     get view() { return viewName; },
     get size() { return { width, height }; },
     setView, followTarget, isSettled,
+    shake(power = 1) { shake = Math.max(shake, power); },
     plateRayFromScreen(px, py) {
       raycaster.setFromCamera(ndc(px, py), camera);
       const hit = new THREE.Vector3();

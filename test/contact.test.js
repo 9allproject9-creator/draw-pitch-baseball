@@ -111,3 +111,29 @@ test('hitFlight HR clears fence', () => {
   const foul = hitFlight('FOUL', 0.5, createRng(5));
   assert.ok(Math.abs(foul.spray) >= 50);
 });
+
+import { findHbp } from '../shared/contact.js';
+import { BATTER } from '../shared/constants.js';
+import { plateToBox } from '../shared/stroke.js';
+
+test('pitch through the batter is HBP', () => {
+  const b = plateToBox(BATTER.x, 1.0);
+  const st = sanitizeStroke(line([0.5, 0.9], [b.u, b.v], 800)).stroke;
+  const p = buildPath(st);
+  assert.ok(findHbp(p, Infinity) != null);
+  const r = resolvePitch({ game: createGame({ innings: 3 }), stroke: st, swing: { type: 'take' }, seed: 3 });
+  assert.equal(r.outcome, 'HBP');
+  assert.ok(r.hbpT > 0 && r.hbpT <= p.T + 200);
+  const ai = resolvePitch({ game: createGame({ innings: 3 }), stroke: st, swing: { type: 'ai', difficulty: 'normal' }, seed: 3 });
+  assert.equal(ai.outcome, 'HBP');
+});
+
+test('pitch in the zone does not hit the batter', () => {
+  assert.equal(findHbp(path, Infinity), null);
+});
+
+test('contact before the ball reaches the batter is a hit, not HBP', () => {
+  const t = timeAtZ(path, HIT_ZONE.ideal);
+  const r = resolvePitch({ game: createGame({ innings: 3 }), stroke: straight, swing: { type: 'human', t, ray: rayTo(path.positionAt(t)) }, seed: 9 });
+  assert.notEqual(r.outcome, 'HBP');
+});

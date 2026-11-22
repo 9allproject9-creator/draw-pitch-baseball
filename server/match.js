@@ -4,7 +4,7 @@ import { sanitizeStroke } from '../shared/stroke.js';
 import { hashSeed } from '../shared/rng.js';
 import { RESULT_MS, HALF_BANNER_MS, STROKE_LIMITS } from '../shared/constants.js';
 
-const PITCH_LEAD_MS = 900;      // 투구 시작까지 여유 (와인드업)
+const PITCH_LEAD_MS = 300;      // 상대 화면 전송 여유 (던진 사람 화면은 즉시 출발)
 const FLIGHT_GRACE_MS = 3000;   // 타자 응답 대기 여유
 
 // 한 방의 경기 진행. emit(event, payload)로 방 전체에 보낸다.
@@ -114,7 +114,7 @@ export class ServerMatch {
     this.phase = 'result';
     this.emit('pitch:result', {
       pitchId: this.pitchId,
-      outcome: res.outcome, pitch: res.pitch, contact: res.contact, swingT: res.swingT,
+      outcome: res.outcome, pitch: res.pitch, contact: res.contact, swingT: res.swingT, hbpT: res.hbpT ?? null,
       flight: res.flight, events: res.events, game: res.game,
       swing: swing && swing.type === 'human' ? { t: swing.t, ray: swing.ray } : null,
     });

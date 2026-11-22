@@ -31,7 +31,7 @@ function clone(g) {
 
 export const OUTCOME_LABEL = {
   TAKE_STRIKE: '스트라이크!', MISS: '헛스윙!', TAKE_BALL: '볼', BALL_AUTO: '볼', FOUL: '파울',
-  GO: '땅볼 아웃', FO: '뜬공 아웃', '1B': '안타!', '2B': '2루타!', '3B': '3루타!!', HR: '홈런!!!',
+  GO: '땅볼 아웃', FO: '뜬공 아웃', HBP: '몸에 맞는 공!', '1B': '안타!', '2B': '2루타!', '3B': '3루타!!', HR: '홈런!!!',
 };
 
 export function applyOutcome(game, outcome, rng, pitchInfo) {
@@ -110,6 +110,11 @@ export function applyOutcome(game, outcome, rng, pitchInfo) {
         events.push({ type: 'walk', team: bat });
         score(walk());
       } else events.push({ type: 'ball' });
+      break;
+    case 'HBP':
+      resetCount();
+      events.push({ type: 'hbp', team: bat });
+      score(walk());
       break;
     case 'GO': {
       resetCount();

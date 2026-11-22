@@ -59,6 +59,8 @@ export function createBall(scene) {
 
   let pts = [];
   let trailColor = new THREE.Color('#ff7a3d');
+  let trailStyle = null; // 'rainbow' | 'fire' | null
+  const tmpC = new THREE.Color();
   let alpha = 1, fading = false;
   let mode = 'idle';
   let path = null, startNow = 0, stopT = Infinity;
@@ -88,7 +90,10 @@ export function createBall(scene) {
       side.multiplyScalar(w);
       pos.set([p.x + side.x, p.y + side.y, p.z + side.z, p.x - side.x, p.y - side.y, p.z - side.z], i * 6);
       const k = alpha * (0.15 + 0.85 * Math.sqrt(f));
-      const r = trailColor.r, g = trailColor.g, bl = trailColor.b;
+      let col3 = trailColor;
+      if (trailStyle === 'rainbow') col3 = tmpC.setHSL((f * 1.6 + performance.now() / 900) % 1, 1, 0.58);
+      else if (trailStyle === 'fire') col3 = tmpC.setRGB(1, 0.25 + 0.7 * f, 0.08 * f);
+      const r = col3.r, g = col3.g, bl = col3.b;
       col.set([r, g, bl, k, r, g, bl, k], i * 8);
     }
     geo.attributes.position.needsUpdate = true;
@@ -111,9 +116,10 @@ export function createBall(scene) {
       ball.visible = false; shadow.visible = false; hit = null; path = null;
       geo.setDrawRange(0, 0);
     },
-    playPitch(p, start, color = '#ff7a3d') {
+    playPitch(p, start, color = '#ff7a3d', style = null) {
       pts = []; alpha = 1; fading = false;
       trailColor = new THREE.Color(color);
+      trailStyle = style;
       path = p; startNow = start; stopT = Infinity; mode = 'pitch';
       ball.visible = false; shadow.visible = false;
     },
@@ -134,7 +140,8 @@ export function createBall(scene) {
       hit = { flight, from: new THREE.Vector3(from.x, from.y, from.z), land, endY, start, dir };
       pts = [];
       trailColor = new THREE.Color('#ffffff');
-      alpha = 0.8;
+      trailStyle = null;
+      alpha = flight.kind === 'bounce' ? 0 : 0.8;
       return { landing: land.clone(), landMs: flight.hangMs };
     },
     fade() { fading = true; },

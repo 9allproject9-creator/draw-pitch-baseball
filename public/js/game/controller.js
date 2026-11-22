@@ -1,10 +1,12 @@
 import { buildPath } from '/shared/trajectory.js';
 import { battingTeam, fieldingTeam, OUTCOME_LABEL } from '/shared/rules.js';
-import { evalHumanSwing } from '/shared/contact.js';
+import { evalHumanSwing, findHbp } from '/shared/contact.js';
+import { describePitch } from '/shared/matchCore.js';
+import { sanitizeStroke } from '/shared/stroke.js';
 import { HIT_ZONE } from '/shared/constants.js';
 import { TEAM_COLORS } from '../scene/players.js';
 
-const WINDUP_MS = 900;
+const WINDUP_MS = 520;
 const RELEASE_AT = 0.92;
 
 export function createGameController(d) {
@@ -15,6 +17,7 @@ export function createGameController(d) {
   let game = null;
   let cur = null;
   let resultUi = null;
+  const streak = { k: { home: 0, away: 0 }, h: { home: 0, away: 0 } };
   let finishRun = null;
   let listeners = [];
   const timers = [];
@@ -28,7 +31,8 @@ export function createGameController(d) {
     const p = cur.path.positionAt(Math.max(0, t));
     if (cur.iAmBatter) effects.zoneRing(!cur.swung && !cur.hit && t > 0 && p.z >= HIT_ZONE.zMin && p.z <= HIT_ZONE.zMax);
     if (!cur.hit && !cur.contactPending && t > cur.path.T * 0.45) players.setGlove(cur.path.positionAt(Math.min(t + 140, cur.path.catchMs)));
-    if (!cur.hit && !cur.contactPending && !cur.caught && t >= cur.path.catchMs) {
+    if (!cur.hit && !cur.contactPending && !cur.hbpFrozen && cur.hbpT != null && t >= cur.hbpT) hbpImpact(cur);
+    if (!cur.hit && !cur.contactPending && !cur.hbpFrozen && !cur.caught && t >= cur.path.catchMs) {
       cur.caught = true;
       ball.stopAt(cur.path.catchMs);
       audio.play('mitt');
@@ -41,6 +45,19 @@ export function createGameController(d) {
       source.submitTake();
     }
   });
+
+  function hbpImpact(c) {
+    if (c.hbpFrozen) return;
+    c.hbpFrozen = true;
+    ball.stopAt(c.hbpT);
+    const pos = c.path.positionAt(c.hbpT);
+    players.knockBatter();
+    audio.play('bonk');
+    effects.sparks(pos);
+    stage.shake(0.9);
+    effects.zoneRing(false);
+    if (c.iAmBatter && !c.swung && !c.tookSent) { c.tookSent = true; batInput.disarm(); source.submitTake(); }
+  }
 
   function teamName(t) { return names[t] || (t === 'home' ? '홈' : '원정'); }
 
@@ -64,22 +81,26 @@ export function createGameController(d) {
       cur = null;
       const iPitch = p.pitcherTeam === me;
       const view = iPitch ? 'pitcher' : 'batter';
-      if (stage.view !== view) stage.setView(view);
+      // 내가 던질 땐 카메라 즉시 전환 → 바로 그릴 수 있게
+      if (stage.view !== view || !stage.isSettled()) stage.setView(view, { instant: iPitch });
       players.setGhosts(view);
       effects.zoneFrame(!iPitch);
       if (iPitch) {
         hud.setRole('✏️ 내가 던질 차례!', 'pitch');
         const id = p.pitchId;
-        const wait = () => {
-          if (!source || !game || cur || id !== p.pitchId) return;
-          if (!stage.isSettled()) { later(wait, 60); return; }
-          drawPad.start({
-            clockEndsAt: p.clockEndsAt || performance.now() + 15000,
-            color: TEAM_COLORS[me],
-            onThrow: (stroke) => { audio.play('pop'); hud.setRole(''); source.submitStroke(stroke); },
-          });
-        };
-        later(wait, 100);
+        drawPad.start({
+          clockEndsAt: p.clockEndsAt || performance.now() + 15000,
+          color: TEAM_COLORS[me],
+          onThrow: (stroke) => {
+            hud.setRole('');
+            source.submitStroke(stroke);
+            // 온라인이어도 내 화면에선 떼는 순간 바로 출발
+            if (source.kind === 'online' && !cur) {
+              const clean = sanitizeStroke(stroke);
+              if (clean.ok) onPitchStart({ pitchId: id, stroke: clean.stroke, startNow: performance.now(), own: true });
+            }
+          },
+        });
       } else {
         hud.setRole(source.kind === 'local' ? '🤖 AI가 마구를 그리는 중…' : `✏️ ${teamName(opp())} 님이 그리는 중…`, 'wait');
       }
@@ -94,12 +115,15 @@ export function createGameController(d) {
 
   function onPitchStart(ps) {
     if (!game) return;
+    if (cur && cur.pitchId === ps.pitchId) return; // 내가 던진 공은 이미 출발함
     drawPad.stop(false);
     const path = buildPath(ps.stroke);
     const iAmBatter = battingTeam(game) === me;
-    cur = { pitchId: ps.pitchId, path, startNow: ps.startNow, stroke: ps.stroke, iAmBatter, swung: false, tookSent: false, hit: false, caught: false, contactPending: false, cracked: false };
+    cur = { pitchId: ps.pitchId, path, startNow: ps.startNow, stroke: ps.stroke, iAmBatter, swung: false, tookSent: false, hit: false, caught: false, contactPending: false, cracked: false, hbpT: findHbp(path, Infinity), hbpFrozen: false };
+    const info = describePitch(ps.stroke).pitch;
+    const style = info.craziness >= 0.6 ? 'rainbow' : info.kmh >= 140 ? 'fire' : null;
     players.playWindup(WINDUP_MS, ps.startNow - WINDUP_MS * RELEASE_AT);
-    ball.playPitch(path, ps.startNow, TEAM_COLORS[fieldingTeam(game)]);
+    ball.playPitch(path, ps.startNow, TEAM_COLORS[fieldingTeam(game)], style);
     const now = performance.now();
     later(() => audio.play('whoosh'), ps.startNow - now);
     hud.showPitch(null);
@@ -152,7 +176,15 @@ export function createGameController(d) {
     batInput.disarm();
     // 상대/AI 타자 스윙 애니메이션
     if (r.swingT != null && !c.iAmBatter) later(() => { players.playSwing(performance.now()); audio.play('swing'); }, r.swingT - 30 - tNow);
-    if (r.flight) {
+    if (r.outcome === 'HBP') {
+      later(() => {
+        hbpImpact(c);
+        c.hit = true;
+        if (r.flight) ball.playHit(r.flight, c.path.positionAt(r.hbpT), performance.now());
+        hud.showPitch(r.pitch);
+        later(() => showOutcome(r, prevGame), 450);
+      }, (r.hbpT ?? 0) - tNow);
+    } else if (r.flight) {
       later(() => doContact(r, prevGame), r.swingT - tNow);
     } else {
       if (c.contactPending) { c.contactPending = false; ball.stopAt(Infinity); }
@@ -173,6 +205,8 @@ export function createGameController(d) {
     drawPad.fadeShown(performance.now());
     hud.showPitch(r.pitch);
     const { landing, landMs } = ball.playHit(r.flight, pos, performance.now());
+    if (r.outcome === 'HR') { stage.shake(1.1); later(() => players.batFlip(), 350); }
+    else if (['2B', '3B'].includes(r.outcome)) stage.shake(0.45);
     const isFoul = r.outcome === 'FOUL';
     if (!isFoul) {
       stage.followTarget(ball.mesh);
@@ -193,6 +227,7 @@ export function createGameController(d) {
     const runs = r.events.filter((e) => e.type === 'run').reduce((a, e) => a + e.runs, 0);
     const go = ev('gameOver');
     if (go && go.walkOff) return { text: '끝내기!!', kind: 'big gold' };
+    if (ev('hbp')) return { text: runs ? '몸에 맞는 공! 😵 +' + runs + '점' : '몸에 맞는 공! 😵', kind: 'big red' };
     if (ev('strikeout')) return { text: r.outcome === 'MISS' ? '헛스윙 삼진!' : '삼진!', kind: 'big red' };
     if (ev('walk')) return { text: runs ? '밀어내기 볼넷!' : '볼넷', kind: 'blue' };
     if (ev('doublePlay')) return { text: '병살!', kind: 'red' };
@@ -212,6 +247,10 @@ export function createGameController(d) {
     else if (o === 'TAKE_BALL' || o === 'BALL_AUTO') audio.play('ball');
     hud.setGame(r.game);
     if (!['1B', '2B', '3B', 'HR', 'GO', 'FO'].includes(o)) players.showBases(r.game.bases);
+    const runsNow = r.events.filter((e) => e.type === 'run').reduce((a, e) => a + e.runs, 0);
+    if (r.events.some((e) => e.type === 'hbp')) later(() => players.animateRunners(prevGame.bases, r.game.bases, runsNow), 1500);
+    if (r.events.some((e) => e.type === 'strikeout')) { players.celebrate(); players.stomp(); stage.shake(0.25); }
+    trackStreaks(r, prevGame);
     if (r.events.some((e) => e.type === 'walk')) players.animateRunners(prevGame.bases, r.game.bases, r.events.filter((e) => e.type === 'run').reduce((a, e) => a + e.runs, 0));
     const half = r.events.find((e) => e.type === 'halfOver');
     if (half) {
@@ -223,6 +262,17 @@ export function createGameController(d) {
         hud.setRole(battingTeam(r.game) === me ? '다음은 내 공격! 🏏' : '다음은 내 수비! ✏️', 'wait');
       }, 1800);
     }
+  }
+
+  function trackStreaks(r, prevGame) {
+    const pa = r.events.find((e) => ['strikeout', 'walk', 'hbp', 'hit', 'homeRun', 'out', 'doublePlay'].includes(e.type));
+    if (!pa) return;
+    const fld = fieldingTeam(prevGame), bat = battingTeam(prevGame);
+    if (pa.type === 'strikeout') streak.k[fld]++; else streak.k[fld] = 0;
+    if (pa.type === 'hit' || pa.type === 'homeRun') streak.h[bat]++; else streak.h[bat] = 0;
+    const who = (t) => (t === me ? '내' : teamName(t) + '의');
+    if (streak.k[fld] >= 2) later(() => toast('🔥 ' + who(fld) + ' ' + streak.k[fld] + '연속 삼진!', 2200), 900);
+    else if (streak.h[bat] >= 2) later(() => toast('💥 ' + who(bat) + ' ' + streak.h[bat] + '연속 안타!', 2200), 900);
   }
 
   function showFinal(forfeit) {
@@ -277,6 +327,7 @@ export function createGameController(d) {
     run(src, { names: nm, firstPhase } = {}) {
       source = src;
       me = src.me;
+      streak.k = { home: 0, away: 0 }; streak.h = { home: 0, away: 0 };
       names = nm || names;
       screens.clear();
       hud.setNames(names, me);

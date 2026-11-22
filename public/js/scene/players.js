@@ -56,7 +56,7 @@ function makeChar({ color, skin = SKIN[0], role = 'fielder' }) {
     torso.add(bat);
   }
   root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  return { root, hips, torso, head, legs, arms, bat, uni, capM, mats, role, anim: { run: 0 } };
+  return { root, hips, torso, head, legs, arms, bat, uni, capM, mats, role, cap, brim, anim: { run: 0 } };
 }
 
 function setGhost(c, on) {
@@ -199,6 +199,41 @@ export function createPlayers(scene) {
   let gloveTarget = null;
   let chasing = [];
   let teams = { batting: 'away', fielding: 'home' };
+  let knock = null;   // 사구 맞은 타자
+  let cele = null;    // 투수 세리머니
+  let stomp = null;   // 타자 발 구르기
+  const flyers = [];  // 날아가는 모자/배트
+  const BATTER_HOME = new THREE.Vector3(-0.95, 0, 0.05);
+  const stars = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), new THREE.MeshBasicMaterial({ color: '#ffe14d' }));
+    stars.add(st);
+  }
+  stars.visible = false;
+  scene.add(stars);
+
+  function spawnFlyer(parts, vel, spin) {
+    const g = new THREE.Group();
+    const anchor = new THREE.Vector3();
+    parts[0].getWorldPosition(anchor);
+    const q = new THREE.Quaternion();
+    parts[0].getWorldQuaternion(q);
+    g.position.copy(anchor);
+    g.quaternion.copy(q);
+    for (const src of parts) {
+      const m = src.clone();
+      const wp = new THREE.Vector3(); src.getWorldPosition(wp);
+      const wq = new THREE.Quaternion(); src.getWorldQuaternion(wq);
+      m.position.copy(wp.sub(anchor).applyQuaternion(q.clone().invert()));
+      m.quaternion.copy(q.clone().invert().multiply(wq));
+      m.scale.copy(src.getWorldScale(new THREE.Vector3()));
+      m.material = src.material.clone();
+      m.material.transparent = false; m.material.opacity = 1; m.material.depthWrite = true;
+      g.add(m);
+    }
+    scene.add(g);
+    flyers.push({ g, vel, spin, age: 0 });
+  }
 
   function setTeams({ batting, fielding }) {
     teams = { batting, fielding };
@@ -208,6 +243,10 @@ export function createPlayers(scene) {
   }
 
   function resetField() {
+    knock = null; cele = null; stomp = null; stars.visible = false;
+    batter.root.position.copy(BATTER_HOME);
+    batter.cap.visible = true; batter.brim.visible = true;
+    if (batter.bat) batter.bat.visible = true;
     for (const f of Object.values(fielders)) { f.root.position.copy(f.home); faceHome(f); f.target = null; }
     chasing = [];
     swingAnim = null;
@@ -264,6 +303,19 @@ export function createPlayers(scene) {
     playSwing(atNow) { swingAnim = { start: atNow }; },
     setGlove(target) { gloveTarget = target ? new THREE.Vector3(target.x, target.y, target.z) : null; },
     showBatter(on) { batter.root.visible = on; },
+    knockBatter() {
+      knock = { start: performance.now() };
+      swingAnim = null;
+      spawnFlyer([batter.cap, batter.brim], new THREE.Vector3(-2.2, 5.2, 0.6 + Math.random()), new THREE.Vector3(7, 3, 10));
+      batter.cap.visible = false; batter.brim.visible = false;
+    },
+    batFlip() {
+      if (!batter.bat || !batter.bat.visible) return;
+      spawnFlyer(batter.bat.children, new THREE.Vector3(-1.2, 8, 1.5), new THREE.Vector3(2, 1, 16));
+      batter.bat.visible = false;
+    },
+    celebrate() { cele = { start: performance.now() }; },
+    stomp() { stomp = { start: performance.now() }; },
     runFielderTo(pos, ms) {
       // 가장 가까운 수비수 1~2명 달려감
       const list = Object.values(fielders).sort((a, b) => a.root.position.distanceToSquared(pos) - b.root.position.distanceToSquared(pos));
@@ -277,9 +329,51 @@ export function createPlayers(scene) {
         pitcherPose(pitcher, Math.min(p, 1.25));
         if (p > 2.2) pitchAnim = null;
       } else pitcherPose(pitcher, 0);
+      if (cele) {
+        const k = (now - cele.start) / 1000;
+        if (k > 1.4) { cele = null; pitcher.root.position.y = 0.25; }
+        else {
+          pitcher.root.position.y = 0.25 + Math.abs(Math.sin(k * Math.PI * 2.2)) * 0.45;
+          pitcher.arms[1].rotation.x = -2.9; pitcher.arms[1].rotation.z = -0.3;
+          pitcher.arms[0].rotation.x = -1.2 + Math.sin(k * 18) * 0.5;
+        }
+      }
+      for (let i = flyers.length - 1; i >= 0; i--) {
+        const fl = flyers[i];
+        fl.age += dt;
+        fl.vel.y -= 9.8 * dt;
+        fl.g.position.addScaledVector(fl.vel, dt);
+        fl.g.rotation.x += fl.spin.x * dt; fl.g.rotation.y += fl.spin.y * dt; fl.g.rotation.z += fl.spin.z * dt;
+        if (fl.g.position.y < 0.08) { fl.g.position.y = 0.08; fl.vel.y *= -0.35; fl.vel.x *= 0.6; fl.vel.z *= 0.6; fl.spin.multiplyScalar(0.5); }
+        if (fl.age > 3.5) { scene.remove(fl.g); flyers.splice(i, 1); }
+      }
       // 타자
-      if (swingAnim) batterPose(batter, (now - swingAnim.start) / 260 + 0.45);
-      else batterPose(batter, -1);
+      if (knock) {
+        const k = (now - knock.start) / 1000;
+        resetPose(batter);
+        const fly = Math.min(1, k / 0.45);
+        const e = 1 - Math.pow(1 - fly, 2);
+        const up = k < 1.6 ? 1 : Math.max(0, 1 - (k - 1.6) / 0.5);
+        batter.root.position.set(BATTER_HOME.x - 1.0 * e * up, Math.sin(Math.PI * fly) * 0.55 * (k < 0.45 ? 1 : 0), BATTER_HOME.z);
+        batter.hips.rotation.x = -1.45 * e * up;
+        batter.hips.position.y = 0.82 - 0.45 * e * up;
+        batter.arms[0].rotation.x = -2.6 * e * up + Math.sin(now / 60) * 0.4 * (k < 0.5 ? 1 : 0);
+        batter.arms[1].rotation.x = -2.4 * e * up;
+        batter.legs[0].rotation.x = -0.9 * e * up; batter.legs[1].rotation.x = -0.4 * e * up;
+        stars.visible = k > 0.35 && k < 1.7;
+        if (stars.visible) {
+          const hp = new THREE.Vector3(); batter.head.getWorldPosition(hp);
+          stars.position.copy(hp).add(new THREE.Vector3(0, 0.45, 0));
+          stars.children.forEach((s, i) => { const a = now / 180 + (i * Math.PI * 2) / 3; s.position.set(Math.cos(a) * 0.35, Math.sin(a * 2) * 0.05, Math.sin(a) * 0.35); s.rotation.y = a * 2; });
+        }
+        if (k > 2.2) { knock = null; stars.visible = false; batter.root.position.copy(BATTER_HOME); }
+      } else if (stomp && now - stomp.start < 1200) {
+        batterPose(batter, -1);
+        const k = (now - stomp.start) / 1000;
+        batter.root.position.y = Math.abs(Math.sin(k * Math.PI * 4)) * 0.18;
+        batter.torso.rotation.z = Math.sin(k * 20) * 0.15;
+      } else if (swingAnim) batterPose(batter, (now - swingAnim.start) / 260 + 0.45);
+      else { batterPose(batter, -1); if (!knock) batter.root.position.y = 0; }
       if (swingAnim && now - swingAnim.start > 1800) swingAnim = null;
       catcherPose(catcher, gloveTarget);
       idlePose(umpire, t, 0.6);
