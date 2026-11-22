@@ -2,10 +2,31 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0e2a1b">
+<meta name="description" content="선을 그리면 그대로 날아가는 야구 게임. AI랑, 친구랑 한 판!">
 <title>그려던져!</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚾</text></svg>">
+<link rel="stylesheet" href="/css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/examples/jsm/"
+  }
+}
+</script>
 </head>
-<body style="font-family:sans-serif;background:#0f2a1c;color:#fff;display:grid;place-items:center;height:100vh;margin:0">
-<h1>그려던져! — 만드는 중…</h1>
+<body>
+<div id="app">
+  <div id="stage"></div>
+  <canvas id="overlay"></canvas>
+  <div id="hud" hidden></div>
+  <div id="banner" aria-live="polite"></div>
+  <div id="screens"></div>
+  <div id="toast" role="status"></div>
+</div>
+<noscript>자바스크립트를 켜야 게임을 할 수 있어요.</noscript>
+<script type="module" src="/js/main.js"></script>
 </body>
 </html>

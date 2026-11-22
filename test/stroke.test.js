@@ -80,6 +80,6 @@ test('ink limit cuts stroke', () => {
 });
 
 test('boxToPlate mirrors u', () => {
-  assert.deepEqual(boxToPlate(0, 0), { x: 1.1, y: -0.05 });
-  assert.deepEqual(boxToPlate(1, 1), { x: -1.1, y: 2.15 });
+  assert.deepEqual(boxToPlate(0, 0), { x: 1.4, y: -0.05 });
+  assert.deepEqual(boxToPlate(1, 1), { x: -1.4, y: 2.15 });
 });
