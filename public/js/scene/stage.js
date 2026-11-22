@@ -31,6 +31,7 @@ export function createStage(container) {
   let trans = null; // {fromPos, fromTarget, toPos, toTarget, t, dur}
   let follow = null;
   let shake = 0;
+  let renderPaused = false;
   const frameCbs = [];
   const resizeCbs = [];
   const raycaster = new THREE.Raycaster();
@@ -128,7 +129,7 @@ export function createStage(container) {
       camera.rotation.y += (Math.random() - 0.5) * shake * 0.03;
     }
     for (const cb of frameCbs) cb(dt, now);
-    renderer.render(scene, camera);
+    if (!renderPaused) renderer.render(scene, camera);
     requestAnimationFrame(loop);
   }
 
@@ -140,6 +141,8 @@ export function createStage(container) {
     get size() { return { width, height }; },
     setView, followTarget, isSettled,
     shake(power = 1) { shake = Math.max(shake, power); },
+    // 그리는 동안 3D 렌더 멈춤 → 선 그리기에 모든 힘을 씀
+    setRenderPaused(on) { renderPaused = on; },
     plateRayFromScreen(px, py) {
       raycaster.setFromCamera(ndc(px, py), camera);
       const hit = new THREE.Vector3();

@@ -12,7 +12,7 @@ export const CATCHER_Z = 0.85;
 // 우타자 몸통 (사구 판정용 원기둥)
 export const BATTER = { x: -0.95, z: 0.05, r: 0.36, yMin: 0.15, yMax: 1.95 };
 export const HIT_ZONE = { zMin: -1.15, zMax: 0.45, ideal: -0.35 };
-export const STROKE_LIMITS = { maxPoints: 600, minDurationMs: 60, maxDurationMs: 8000, inkMax: 30, clockMs: 15000 };
+export const STROKE_LIMITS = { maxPoints: 600, minDurationMs: 60, maxDurationMs: 20000, inkMax: 5000, clockMs: 15000 };
 // 비행 시간 = base + 선 길이(m)×perMeter + 그린 시간×drawFactor (공은 선을 따라 일정한 속도로 이동)
 export const FLIGHT = { base: 250, perMeter: 100, drawFactor: 0.12, minMs: 400, maxMs: 3000, speedDistance: 17.2, blendFrac: 0.08 };
 export const CONTACT = { dPerfect: 0.06, dMax: 0.30, timingHalf: 0.8 };

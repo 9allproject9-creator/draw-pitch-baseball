@@ -70,6 +70,39 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
   };
   const toScreen = (u, v) => { const p = boxToPlate(u, v); return proj(stage, p.x, p.y); };
 
+  // 그림판처럼: 선은 전용 저지연 캔버스에 포인터 이벤트 즉시 그림
+  const inkCanvas = document.getElementById('ink');
+  let inkCtx = null;
+  try { inkCtx = inkCanvas.getContext('2d', { desynchronized: true }); } catch { inkCtx = inkCanvas.getContext('2d'); }
+  let inkDpr = 1;
+  const sizeInk = () => {
+    inkDpr = Math.min(window.devicePixelRatio || 1, 2);
+    const { width, height } = stage.size;
+    inkCanvas.width = Math.round(width * inkDpr); inkCanvas.height = Math.round(height * inkDpr);
+  };
+  stage.onResize(() => { sizeInk(); if (drawing) inkRedraw(); });
+  sizeInk();
+  let spts = []; // 화면 좌표 (pts와 같은 순서)
+  function inkClear() { inkCtx.setTransform(1, 0, 0, 1, 0, 0); inkCtx.clearRect(0, 0, inkCanvas.width, inkCanvas.height); }
+  function inkRedraw() {
+    inkClear();
+    if (!spts.length) return;
+    const g = inkCtx;
+    g.setTransform(inkDpr, 0, 0, inkDpr, 0, 0);
+    const { width, height } = stage.size;
+    const pen = Math.max(4, Math.min(width, height) * 0.012);
+    const path = () => {
+      g.beginPath();
+      g.moveTo(spts[0][0], spts[0][1]);
+      if (spts.length < 3) { for (let i = 1; i < spts.length; i++) g.lineTo(spts[i][0], spts[i][1]); if (spts.length === 1) g.lineTo(spts[0][0] + 0.1, spts[0][1]); return; }
+      for (let i = 1; i < spts.length - 1; i++) g.quadraticCurveTo(spts[i][0], spts[i][1], (spts[i][0] + spts[i + 1][0]) / 2, (spts[i][1] + spts[i + 1][1]) / 2);
+      const L = spts[spts.length - 1]; g.lineTo(L[0], L[1]);
+    };
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    g.globalAlpha = 0.4; path(); g.strokeStyle = penColor; g.lineWidth = pen * 2.2; g.stroke();
+    g.globalAlpha = 1; path(); g.strokeStyle = '#fff'; g.lineWidth = pen; g.stroke();
+  }
+
   let ink = 0;
   const seg = (a, b) => { const p = boxToPlate(a[0], a[1]), q = boxToPlate(b[0], b[1]); return Math.hypot(p.x - q.x, p.y - q.y); };
   function inkUsed() { return ink; }
@@ -77,6 +110,8 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
   function finish() {
     if (!drawing && !pts.length) return;
     drawing = false;
+    stage.setRenderPaused(false);
+    spts = []; inkClear();
     const stroke = { pts: pts.map((p) => [round(p[0]), round(p[1]), Math.round(p[2] * 10) / 10]) };
     const cb = onThrow;
     stop(false);
@@ -90,16 +125,19 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
     if (!b) return;
     const t = Math.max(0, (e.timeStamp || performance.now()) - t0);
     const last = pts[pts.length - 1];
-    if (last && t - last[2] < 8 && pts.length > 1) {
+    const ls = spts[spts.length - 1];
+    if (last && pts.length > 1 && ls && Math.hypot(e.clientX - ls[0], e.clientY - ls[1]) < 2) {
       const prev = pts[pts.length - 2];
       ink -= seg(prev, last);
       last[0] = b[0]; last[1] = b[1]; last[2] = Math.max(last[2], t);
       ink += seg(prev, last);
+      spts[spts.length - 1] = [e.clientX, e.clientY];
     } else {
       if (last) ink += seg(last, b);
       pts.push([b[0], b[1], last ? Math.max(t, last[2]) : 0]);
+      spts.push([e.clientX, e.clientY]);
     }
-    if (inkUsed() >= STROKE_LIMITS.inkMax || t >= STROKE_LIMITS.maxDurationMs) finish();
+    if (t >= STROKE_LIMITS.maxDurationMs) finish();
   }
 
   function insideBox(px, py) {
@@ -109,27 +147,37 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
     return p.x >= BOX.xMin - m && p.x <= BOX.xMax + m && p.y >= BOX.yMin - m && p.y <= BOX.yMax + m;
   }
 
+  let pointerId = null; // 처음 누른 손가락/마우스만 따라감
   const onDown = (e) => {
     if (!active || drawing) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pointerId = e.pointerId;
     e.preventDefault();
     try { overlay.canvas.setPointerCapture(e.pointerId); } catch { /* 무시 */ }
     drawing = true;
     hint = false;
     pts = [];
+    spts = [];
     ink = 0;
     t0 = e.timeStamp || performance.now();
+    stage.setRenderPaused(true);
     addPoint(e);
+    if (drawing) inkRedraw();
   };
   const onMove = (e) => {
-    if (!drawing) return;
-    e.preventDefault();
+    if (!drawing || e.pointerId !== pointerId) return;
+    if (e.cancelable && e.type === 'pointermove') e.preventDefault();
     const list = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of (list.length ? list : [e])) { if (drawing) addPoint(ev); }
+    if (drawing) inkRedraw();
   };
-  const onUp = (e) => { if (drawing) { e.preventDefault(); addPoint(e); finish(); } };
+  const onUp = (e) => { if (drawing && e.pointerId === pointerId) { e.preventDefault(); addPoint(e); finish(); } };
 
   overlay.canvas.addEventListener('pointerdown', onDown, { passive: false });
+  // pointerrawupdate: 크롬에서 마우스 움직임을 프레임 기다리지 않고 바로 받음
+  const RAW = 'onpointerrawupdate' in window;
   overlay.canvas.addEventListener('pointermove', onMove, { passive: false });
+  if (RAW) overlay.canvas.addEventListener('pointerrawupdate', onMove, { passive: true });
   overlay.canvas.addEventListener('pointerup', onUp, { passive: false });
   overlay.canvas.addEventListener('pointercancel', onUp, { passive: false });
 
@@ -206,19 +254,6 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
         g.fillText('선이 끝나는 곳이 노란 존 안이면 스트라이크', (left + right) / 2, bottom - fs * 0.9);
         g.restore();
       }
-      // 잉크 게이지
-      const ink = drawing ? inkUsed() / STROKE_LIMITS.inkMax : 0;
-      const gw = (right - left) * 0.7, gx = (left + right) / 2 - gw / 2, gy = bottom + 12;
-      g.save();
-      g.fillStyle = 'rgba(0,0,0,0.45)';
-      g.fillRect(gx - 2, gy - 2, gw + 4, 12);
-      g.fillStyle = ink > 0.8 ? '#ff4d4d' : penColor;
-      g.fillRect(gx, gy, gw * (1 - ink), 8);
-      g.font = `700 ${Math.max(11, fs * 0.65)}px Pretendard, sans-serif`;
-      g.fillStyle = '#fff';
-      g.textAlign = 'right';
-      g.fillText('잉크', gx - 8, gy + 8);
-      g.restore();
       // 투구 시계
       const remain = Math.max(0, clockEndsAt - now);
       const sec = Math.ceil(remain / 1000);
@@ -235,7 +270,7 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
         if (sec <= 5 && sec > 0 && sec !== lastTick) { lastTick = sec; tickCb?.(); }
       }
       // 그리는 중인 선
-      if (pts.length) {
+      if (false && pts.length) {
         g.save();
         g.lineCap = 'round'; g.lineJoin = 'round';
         strokePath(g, pts); g.strokeStyle = penColor; g.lineWidth = pen * 2.2; g.globalAlpha = 0.35; g.stroke();
@@ -277,6 +312,8 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
   function stop(clear = true) {
     active = false;
     drawing = false;
+    stage.setRenderPaused(false);
+    spts = []; inkClear();
     pts = [];
     overlay.setActive(false);
     if (clear) shown = null;
