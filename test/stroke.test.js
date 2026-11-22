@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sanitizeStroke, boxToPlate, strokeInk, strokeMetrics, flightMs, kmh, namePitch } from '../shared/stroke.js';
 import { line, circles, zigzag, figure8, scribble } from './helpers.js';
+import { BOX, STROKE_LIMITS } from '../shared/constants.js';
 
 const analyze = (s) => {
   const r = sanitizeStroke(s);
@@ -14,7 +15,7 @@ const analyze = (s) => {
 test('straight line has ~0 craziness', () => {
   const { m, ms, name } = analyze(line([0.5, 0.9], [0.5, 0.5], 300));
   assert.ok(m.craziness < 0.03, String(m.craziness));
-  assert.equal(ms, 400);
+  assert.ok(ms <= 520, String(ms));
   assert.equal(name, '강속구');
 });
 
@@ -42,7 +43,15 @@ test('scribble is crazy', () => {
 
 test('flight clamps', () => {
   assert.equal(flightMs(sanitizeStroke(line([0.5, 0.9], [0.5, 0.5], 100)).stroke), 400);
-  assert.equal(flightMs(sanitizeStroke(line([0.2, 0.9], [0.5, 0.5], 10000)).stroke), 3000);
+  assert.equal(flightMs(sanitizeStroke(circles(20, 0.25, 7000)).stroke), 3000);
+});
+
+test('careful slow drawing is not much slower', () => {
+  const fast = flightMs(sanitizeStroke(line([0.5, 0.9], [0.5, 0.4], 200)).stroke);
+  const slow = flightMs(sanitizeStroke(line([0.5, 0.9], [0.5, 0.4], 1500)).stroke);
+  assert.ok(slow - fast < 200, slow + ' vs ' + fast);
+  const crazy = flightMs(sanitizeStroke(circles(3, 0.12, 1500)).stroke);
+  assert.ok(crazy > fast + 300, crazy + ' vs ' + fast);
 });
 
 test('kmh', () => {
@@ -74,12 +83,12 @@ test('clamps coordinates and downsamples', () => {
 });
 
 test('ink limit cuts stroke', () => {
-  const r = sanitizeStroke(circles(12, 0.3, 5000));
+  const r = sanitizeStroke(circles(30, 0.3, 7000));
   assert.ok(r.ok);
-  assert.ok(strokeInk(r.stroke) <= 14.01, String(strokeInk(r.stroke)));
+  assert.ok(strokeInk(r.stroke) <= STROKE_LIMITS.inkMax + 0.01, String(strokeInk(r.stroke)));
 });
 
 test('boxToPlate mirrors u', () => {
-  assert.deepEqual(boxToPlate(0, 0), { x: 1.4, y: -0.05 });
-  assert.deepEqual(boxToPlate(1, 1), { x: -1.4, y: 2.15 });
+  assert.deepEqual(boxToPlate(0, 0), { x: BOX.xMax, y: BOX.yMin });
+  assert.deepEqual(boxToPlate(1, 1), { x: BOX.xMin, y: BOX.yMax });
 });

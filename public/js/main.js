@@ -70,7 +70,7 @@ async function getNet() {
   return net;
 }
 
-function rememberRoom(code) { try { code ? localStorage.setItem('gd.lastRoom', JSON.stringify({ code, at: Date.now() })) : localStorage.removeItem('gd.lastRoom'); } catch { /* 무시 */ } }
+function rememberRoom(code) { try { code ? sessionStorage.setItem('gd.lastRoom', JSON.stringify({ code, at: Date.now() })) : sessionStorage.removeItem('gd.lastRoom'); } catch { /* 무시 */ } }
 
 // 방에 들어간 뒤: 대기실 표시 → 경기 시작되면 컨트롤러로
 async function enterRoom(net, code, me) {
@@ -144,7 +144,7 @@ async function joinRoom(name, code) {
 
 async function tryResume() {
   let last = null;
-  try { last = JSON.parse(localStorage.getItem('gd.lastRoom') || 'null'); } catch { /* 무시 */ }
+  try { last = JSON.parse(sessionStorage.getItem('gd.lastRoom') || 'null'); } catch { /* 무시 */ }
   if (!last || Date.now() - last.at > 3 * 60 * 1000) return false;
   try {
     const net = await getNet();

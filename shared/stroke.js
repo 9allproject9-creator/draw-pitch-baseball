@@ -82,6 +82,13 @@ export function strokeDuration(stroke) {
   return stroke.pts[stroke.pts.length - 1][2];
 }
 
+// 판정면 미터 기준 누적 길이 배열
+export function strokeArc(stroke) {
+  const arc = [0];
+  for (let i = 1; i < stroke.pts.length; i++) arc.push(arc[i - 1] + segLen(stroke.pts[i - 1], stroke.pts[i]));
+  return arc;
+}
+
 export function strokeInk(stroke) {
   let ink = 0;
   for (let i = 1; i < stroke.pts.length; i++) ink += segLen(stroke.pts[i - 1], stroke.pts[i]);
@@ -160,7 +167,7 @@ export function strokeMetrics(stroke) {
 }
 
 export function flightMs(stroke) {
-  return clamp(strokeDuration(stroke) * FLIGHT.factor, FLIGHT.minMs, FLIGHT.maxMs);
+  return clamp(FLIGHT.base + strokeInk(stroke) * FLIGHT.perMeter + strokeDuration(stroke) * FLIGHT.drawFactor, FLIGHT.minMs, FLIGHT.maxMs);
 }
 
 export function kmh(ms) {

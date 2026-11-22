@@ -1,5 +1,5 @@
 import { PITCH_CAM, RELEASE, CATCHER_Z, ZONE, BALL_R, FLIGHT } from './constants.js';
-import { boxToPlate, flightMs, strokeDuration } from './stroke.js';
+import { boxToPlate, flightMs, strokeDuration, strokeArc } from './stroke.js';
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (t) => t * t * (3 - 2 * t);
@@ -15,19 +15,23 @@ export function buildPath(stroke) {
   const D = strokeDuration(stroke);
   const T = flightMs(stroke);
 
-  const strokeAt = (tau) => {
-    if (tau <= pts[0][2]) return [pts[0][0], pts[0][1]];
-    if (tau >= D) { const l = pts[pts.length - 1]; return [l[0], l[1]]; }
-    let lo = 0, hi = pts.length - 1;
-    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (pts[m][2] <= tau) lo = m; else hi = m; }
-    const a = pts[lo], b = pts[hi];
-    const f = b[2] > a[2] ? (tau - a[2]) / (b[2] - a[2]) : 0;
-    return [lerp(a[0], b[0], f), lerp(a[1], b[1], f)];
+  // 선 위 위치를 길이 비율(0~1)로 찾음 → 공이 선을 따라 일정한 속도로 이동
+  const arc = strokeArc(stroke);
+  const total = arc[arc.length - 1];
+  const strokeAt = (f) => {
+    if (total <= 0 || f <= 0) return [pts[0][0], pts[0][1]];
+    if (f >= 1) { const l = pts[pts.length - 1]; return [l[0], l[1]]; }
+    const d = f * total;
+    let lo = 0, hi = arc.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (arc[m] <= d) lo = m; else hi = m; }
+    const seg = arc[hi] - arc[lo];
+    const k = seg > 0 ? (d - arc[lo]) / seg : 0;
+    return [lerp(pts[lo][0], pts[hi][0], k), lerp(pts[lo][1], pts[hi][1], k)];
   };
 
   const inFlight = (t) => {
     const s = Math.min(1, Math.max(0, t / T));
-    const [u, v] = strokeAt(s * D);
+    const [u, v] = strokeAt(s);
     const B = boxToPlate(u, v);
     const z = lerp(RELEASE.z, 0, s);
     const k = (z - PITCH_CAM.z) / (0 - PITCH_CAM.z);

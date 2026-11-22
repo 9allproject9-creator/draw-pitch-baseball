@@ -53,7 +53,7 @@ export function createStage(container) {
         const ax = Math.atan(Math.tan(Math.atan(Math.abs(c.x) / -c.z)) / aspect);
         needV = Math.max(needV, ay, ax);
       }
-      const marginTop = 1.22; // 위쪽 HUD 공간
+      const marginTop = 1.16; // 위 전광판 자리만 빼고 거의 전체가 그리기 박스
       fov = THREE.MathUtils.radToDeg(Math.atan(Math.tan(needV) * marginTop) * 2);
       fov = Math.max(fov, 8);
     } else if (viewName === 'batter') {

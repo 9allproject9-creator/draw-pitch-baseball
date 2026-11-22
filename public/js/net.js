@@ -2,8 +2,9 @@ import { io } from '/socket.io/socket.io.esm.min.js';
 
 function getSessionId() {
   try {
-    let s = localStorage.getItem('gd.session');
-    if (!s) { s = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); localStorage.setItem('gd.session', s); }
+    // 탭마다 다른 세션 (같은 브라우저 탭 2개로도 대전 가능), 새로고침해도 유지
+    let s = sessionStorage.getItem('gd.session');
+    if (!s) { s = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); sessionStorage.setItem('gd.session', s); }
     return s;
   } catch { return 'tmp-' + Math.random().toString(36).slice(2); }
 }

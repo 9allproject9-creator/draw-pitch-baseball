@@ -46,10 +46,10 @@ export function aiBatter(info, difficulty, rng) {
   const swingP = info.inZone ? D.zoneSwing : D.chase + 0.35 * info.craziness;
   const swing = rng() < swingP;
   if (!swing) return { swing: false, contact: false, quality: 0 };
-  const speedF = clamp(0.55 + (0.35 * (info.T / 1000 - 0.4)) / 0.6, 0.55, 1.0);
-  const contactP = D.base * speedF * (1 - 0.9 * info.craziness) * (info.inZone ? 1 : 0.5);
+  const speedF = clamp(0.6 + (0.3 * (info.T / 1000 - 0.4)) / 0.6, 0.6, 1.0);
+  const contactP = D.base * speedF * (1 - 0.75 * info.craziness) * (info.inZone ? 1 : 0.5);
   const contact = rng() < contactP;
-  const quality = contact ? Math.pow(rng(), 1 + 1.5 * info.craziness) * D.qMax : 0;
+  const quality = contact ? Math.pow(rng(), 0.8 + 1.6 * info.craziness) * D.qMax : 0;
   return { swing: true, contact, quality };
 }
 

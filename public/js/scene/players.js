@@ -256,6 +256,8 @@ export function createPlayers(scene) {
       pitcher.root.visible = view !== 'pitcher';
       catcher.root.visible = view !== 'batter';
       umpire.root.visible = view !== 'batter';
+      setGhost(catcher, view === 'pitcher');
+      setGhost(umpire, view === 'pitcher');
       setGhost(batter, view === 'batter');
     },
     playWindup(durMs, startAt = performance.now()) { pitchAnim = { start: startAt, dur: durMs }; },

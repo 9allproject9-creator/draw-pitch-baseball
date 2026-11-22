@@ -1,5 +1,5 @@
 import { BOX, ZONE, STROKE_LIMITS } from '/shared/constants.js';
-import { plateToBox, boxToPlate, strokeInk } from '/shared/stroke.js';
+import { plateToBox, boxToPlate, strokeInk, strokeArc } from '/shared/stroke.js';
 
 // 투구 그리기 오버레이 + 타격 입력이 같이 쓰는 2D 캔버스
 export function createOverlay(stage, canvas) {
@@ -102,7 +102,6 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
 
   const onDown = (e) => {
     if (!active || drawing) return;
-    if (!insideBox(e.clientX, e.clientY)) return;
     e.preventDefault();
     try { overlay.canvas.setPointerCapture(e.pointerId); } catch { /* 무시 */ }
     drawing = true;
@@ -124,15 +123,21 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
   overlay.canvas.addEventListener('pointerup', onUp, { passive: false });
   overlay.canvas.addEventListener('pointercancel', onUp, { passive: false });
 
+  // 점 사이를 중간점 2차 곡선으로 이어 부드럽게
   function strokePath(g, list, upto = Infinity) {
     g.beginPath();
-    let started = false;
-    for (const p of list) {
-      if (p[2] > upto) break;
-      const s = toScreen(p[0], p[1]);
-      if (!started) { g.moveTo(s.px, s.py); started = true; } else g.lineTo(s.px, s.py);
+    const P = [];
+    for (const p of list) { if (p[2] > upto) break; P.push(toScreen(p[0], p[1])); }
+    if (!P.length) return false;
+    g.moveTo(P[0].px, P[0].py);
+    if (P.length < 3) { for (let i = 1; i < P.length; i++) g.lineTo(P[i].px, P[i].py); return true; }
+    for (let i = 1; i < P.length - 1; i++) {
+      const mx = (P[i].px + P[i + 1].px) / 2, my = (P[i].py + P[i + 1].py) / 2;
+      g.quadraticCurveTo(P[i].px, P[i].py, mx, my);
     }
-    return started;
+    const L = P[P.length - 1];
+    g.lineTo(L.px, L.py);
+    return true;
   }
 
   overlay.add((g, W, H, now) => {
@@ -185,7 +190,7 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
         g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 6;
         const cy = (top + bottom) / 2;
         const bob = Math.sin(now / 250) * 4;
-        g.fillText('✏️ 박스 안에 한 붓으로 그려서 던져요!', (left + right) / 2, top + fs * 1.6 + bob);
+        g.fillText('✏️ 한 붓으로 그려서 던져요!', (left + right) / 2, top + (bottom - top) * 0.2 + bob);
         g.font = `600 ${fs * 0.8}px Pretendard, sans-serif`;
         g.fillStyle = 'rgba(255,255,255,0.85)';
         g.fillText('선이 끝나는 곳이 노란 존 안이면 스트라이크', (left + right) / 2, bottom - fs * 0.9);
@@ -234,7 +239,8 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
       let alpha = 1;
       if (shown.fadeAt) alpha = Math.max(0, 1 - (now - shown.fadeAt) / 700);
       if (alpha <= 0) { shown = null; return; }
-      const D = stroke.pts[stroke.pts.length - 1][2] || 1;
+      if (!shown.arc) shown.arc = strokeArc(stroke);
+      const arc = shown.arc, total = arc[arc.length - 1] || 1;
       const prog = startNow == null ? -1 : Math.min(1, Math.max(0, (now - startNow) / T));
       g.save();
       g.lineCap = 'round'; g.lineJoin = 'round';
@@ -243,7 +249,15 @@ export function createDrawPad(stage, overlay, { color = '#ff5a36' } = {}) {
       g.setLineDash([]);
       if (prog > 0) {
         g.globalAlpha = 0.9 * alpha;
-        strokePath(g, stroke.pts, prog * D); g.strokeStyle = penColor; g.lineWidth = pen * 1.1; g.stroke();
+        const lim = prog * total;
+        const part = [];
+        for (let i = 0; i < stroke.pts.length; i++) {
+          if (arc[i] <= lim) { part.push(stroke.pts[i]); continue; }
+          const a = stroke.pts[i - 1], b = stroke.pts[i], k = (lim - arc[i - 1]) / ((arc[i] - arc[i - 1]) || 1);
+          if (a) part.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, 0]);
+          break;
+        }
+        strokePath(g, part); g.strokeStyle = penColor; g.lineWidth = pen * 1.1; g.stroke();
       }
       g.restore();
     }

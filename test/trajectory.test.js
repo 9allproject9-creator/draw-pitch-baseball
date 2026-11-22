@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildPath, isStrike } from '../shared/trajectory.js';
-import { sanitizeStroke, boxToPlate } from '../shared/stroke.js';
+import { sanitizeStroke, boxToPlate, strokeArc } from '../shared/stroke.js';
 import { RELEASE, PITCH_CAM, CATCHER_Z, ZONE, BALL_R, FLIGHT } from '../shared/constants.js';
 import { circles, line, polyline } from './helpers.js';
 
@@ -28,13 +28,13 @@ test('path ends at drawn end on plate', () => {
 test('pitcher view matches drawing', () => {
   const st = S(circles(3, 0.15, 2000));
   const p = buildPath(st);
-  const D = st.pts[st.pts.length - 1][2];
+  const arc = strokeArc(st), total = arc[arc.length - 1];
   for (const s of [0.2, 0.35, 0.5, 0.77, 0.95]) {
     const P = p.positionAt(s * p.T);
-    const tau = s * D;
-    let i = 1; while (i < st.pts.length - 1 && st.pts[i][2] < tau) i++;
+    const d = s * total;
+    let i = 1; while (i < st.pts.length - 1 && arc[i] < d) i++;
     const a = st.pts[i - 1], b = st.pts[i];
-    const f = b[2] > a[2] ? (tau - a[2]) / (b[2] - a[2]) : 0;
+    const f = arc[i] > arc[i - 1] ? (d - arc[i - 1]) / (arc[i] - arc[i - 1]) : 0;
     const B = boxToPlate(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f);
     const d1 = dir(PITCH_CAM, P), d2 = dir(PITCH_CAM, { x: B.x, y: B.y, z: 0 });
     const ang = Math.acos(Math.min(1, d1.x * d2.x + d1.y * d2.y + d1.z * d2.z));
@@ -42,8 +42,8 @@ test('pitcher view matches drawing', () => {
   }
 });
 
-test('fast segment moves faster', () => {
-  // 앞 절반(0.9→0.6) 100ms, 뒤 절반(0.6→0.3) 900ms
+test('pauses while drawing do not stall the ball', () => {
+  // 앞 절반(0.9→0.6) 100ms, 뒤 절반(0.6→0.3) 900ms → 그래도 공은 절반 시점에 선의 절반 위치
   const st = S({ pts: [[0.5, 0.9, 0], [0.5, 0.6, 100], [0.5, 0.3, 1000]] });
   const p = buildPath(st);
   const mid = p.positionAt(p.T * 0.5);
@@ -51,7 +51,7 @@ test('fast segment moves faster', () => {
   // 투수 카메라 광선을 판정면으로 연장한 y 가 이미 0.6 지점보다 아래
   const k = (0 - PITCH_CAM.z) / (mid.z - PITCH_CAM.z);
   const yOnPlate = PITCH_CAM.y + (mid.y - PITCH_CAM.y) * k;
-  assert.ok(yOnPlate < midPlateY, `${yOnPlate} < ${midPlateY}`);
+  assert.ok(Math.abs(yOnPlate - midPlateY) < 1e-6, `${yOnPlate} vs ${midPlateY}`);
 });
 
 test('continues to catcher', () => {
