@@ -1,0 +1,20 @@
+{
+  "name": "draw-pitch-baseball",
+  "version": "1.0.0",
+  "description": "그려던져! - 선을 그리면 그대로 날아가는 야구 게임",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "socket.io": "^4.8.4",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
+  }
+}
